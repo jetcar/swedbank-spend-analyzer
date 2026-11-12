@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finance</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/theme.js"></script>
+  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="К содержимому">К содержимому</a>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>finance</a>
+    <p class="nav-caption" data-i18n="ЛИЧНЫЕ ФИНАНСЫ">ЛИЧНЫЕ ФИНАНСЫ</p>
+    <nav class="navigation" data-i18n-aria-label="Разделы приложения" aria-label="Разделы приложения">
+      <a href="#overview" data-view="overview"><span data-icon="home"></span><span data-i18n="Обзор">Обзор</span></a>
+      <a href="#plan" data-view="plan"><span data-icon="calendar"></span><span data-i18n="План">План</span></a>
+      <a href="#operations" data-view="operations"><span data-icon="list"></span><span data-i18n="Операции">Операции</span></a>
+      <a href="#categories" data-view="categories"><span data-icon="tag"></span><span data-i18n="Категории">Категории</span></a>
+      <a href="#accounts" data-view="accounts"><span data-icon="wallet"></span><span data-i18n="Счета">Счета</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <select id="language" data-i18n-aria-label="Язык" aria-label="Язык"><option value="ru">Русский</option><option value="en">English</option><option value="et">Eesti</option></select>
+      <button class="icon-button" data-theme-toggle data-i18n-aria-label="Тёмная тема" aria-label="Тёмная тема" aria-pressed="false"><span data-icon="moon"></span></button>
+      <button id="sign-out" class="ghost" hidden data-i18n="Выйти">Выйти</button>
+    </div>
+  </aside>
+  <main id="main" tabindex="-1">
+    <header class="app-header"><div><p class="eyebrow" data-i18n="ЛИЧНЫЕ ФИНАНСЫ">ЛИЧНЫЕ ФИНАНСЫ</p><h1 id="view-title">Обзор</h1><p id="view-subtitle" class="subtitle"></p></div>
+      <!-- Static FastAPI form; POST Origin and Sec-Fetch-Site are enforced by the gateway. -->
+      <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+      <form id="demo-entry" action="/auth/demo/start" method="post"><button class="secondary" type="submit" data-i18n="Демо">Демо</button></form><div class="toolbar"><input id="category-month" type="month" data-i18n-aria-label="Месяц" aria-label="Месяц"><div class="sync-control"><button id="sync" class="secondary" aria-describedby="last-sync"><span data-icon="sync"></span><span data-i18n="Синхронизировать">Синхронизировать</span></button><small id="last-sync" class="last-sync muted" aria-live="polite"><span data-i18n="Последняя синхронизация">Последняя синхронизация</span><time id="last-sync-time">—</time></small></div></div>
+    </header>
+    <aside id="demo-notice" class="card" hidden>
+      <strong data-i18n="Демо · Sandbox">Демо · Sandbox</strong>
+      <p data-i18n="Данные только в памяти: сброс каждый день в 00:00 UTC или по кнопке. После сброса подключите sandbox и импортируйте всё заново.">Данные только в памяти: сброс каждый день в 00:00 UTC или по кнопке. После сброса подключите sandbox и импортируйте всё заново.</p>
+      <div class="toolbar">
+        <!-- Static FastAPI form; POST Origin and Sec-Fetch-Site are enforced by the gateway. -->
+        <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+        <form action="/auth/demo/start" method="post"><button type="submit" data-i18n="Сбросить демо">Сбросить демо</button></form>
+        <!-- Static FastAPI form; POST Origin and Sec-Fetch-Site are enforced by the gateway. -->
+        <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+        <form action="/auth/demo/exit" method="post"><button type="submit" class="secondary" data-i18n="Выйти из демо">Выйти из демо</button></form>
+      </div>
+    </aside>
+    <div id="status" class="status muted" role="status" aria-live="polite"></div>
+    <section data-page="overview">
+      <div class="summary-grid">
+        <article class="balance-hero"><span data-i18n="Общий баланс">Общий баланс</span><strong id="total-balance" class="hero-value">—</strong><span class="hero-caption" data-i18n="По отслеживаемым счетам">По отслеживаемым счетам</span><a href="#accounts" data-i18n="Все счета">Все счета</a></article>
+        <article class="stat-card"><span class="stat-icon" data-icon="arrowDown"></span><span class="muted" data-i18n="Доходы за месяц">Доходы за месяц</span><strong id="earned" class="value credit">—</strong></article>
+        <article class="stat-card"><span class="stat-icon expense-tint" data-icon="arrowUp"></span><span class="muted" data-i18n="Расходы за месяц">Расходы за месяц</span><strong id="spent" class="value">—</strong></article>
+      </div>
+      <article class="card forecast-summary"><div class="section-heading"><h2 data-i18n="Прогноз месяца">Прогноз месяца</h2><a href="#plan" class="text-link" data-i18n="Открыть план">Открыть план</a></div><div id="overview-forecast"></div></article>
+      <div class="overview-grid">
+        <article class="card cashflow-card"><div class="section-heading"><h2 data-i18n="Движение денег">Движение денег</h2><select id="chart-currency" data-i18n-aria-label="Валюта" aria-label="Валюта"></select></div><div class="chart-legend"><span class="income-dot" data-i18n="Доходы">Доходы</span><span class="expense-dot" data-i18n="Расходы">Расходы</span></div><div id="cashflow"></div><p class="chart-note muted" data-i18n="Доходы и расходы по дням выбранного месяца">Доходы и расходы по дням выбранного месяца</p></article>
+        <article class="card"><div class="section-heading"><h2 data-i18n="Счета">Счета</h2><a href="#accounts" class="text-link" data-i18n="Все счета">Все счета</a></div><div id="account-summary"></div><button class="secondary full-width" data-connect><span data-icon="plus"></span><span data-i18n="Подключить Swedbank">Подключить Swedbank</span></button></article>
+        <article class="card"><div class="section-heading"><h2 data-i18n="Бюджеты месяца">Бюджеты месяца</h2><a href="#categories" class="text-link" data-i18n="Все категории">Все категории</a></div><div id="budget-summary"></div></article>
+        <article class="card"><div class="section-heading"><h2 data-i18n="Последние операции">Последние операции</h2><a href="#operations" class="text-link" data-i18n="Все операции">Все операции</a></div><div id="recent-transactions"></div></article>
+      </div>
+    </section>
+    <section data-page="plan" hidden>
+      <article class="card forecast-summary"><div class="section-heading"><h2 data-i18n="Прогноз месяца">Прогноз месяца</h2><span class="muted plan-note" data-i18n="По отслеживаемым счетам">По отслеживаемым счетам</span></div><div id="plan-forecast"></div></article>
+      <div class="plan-layout"><article class="card"><div class="section-heading"><h2 data-i18n="Регулярный план">Регулярный план</h2><a href="#categories" class="text-link" data-i18n="Все категории">Все категории</a></div><p class="plan-note muted" data-i18n="Категории повторяются каждый месяц. Бюджет — остаток лимита; платёж — ожидается до оплаты. Отрицательная сумма — доход.">Категории повторяются каждый месяц. Бюджет — остаток лимита; платёж — ожидается до оплаты. Отрицательная сумма — доход.</p><p class="plan-note muted" data-i18n="Автоматически — завершить после первой операции. Ждать остаток — учитывать частичную оплату. Завершено — больше ничего не ожидается.">Автоматически — завершить после первой операции. Ждать остаток — учитывать частичную оплату. Завершено — больше ничего не ожидается.</p><div id="plan-categories"></div></article>
+      <article class="card"><div class="section-heading"><h2 data-i18n="Только в этом месяце">Только в этом месяце</h2><button id="add-plan-item" class="secondary"><span data-icon="plus"></span><span data-i18n="Добавить">Добавить</span></button></div><p class="plan-note muted" data-i18n="Дополнительно к категориям. Не добавляйте сюда расходы, уже включённые в бюджет категории.">Дополнительно к категориям. Не добавляйте сюда расходы, уже включённые в бюджет категории.</p><div id="plan-items"></div></article></div>
+    </section>
+    <section data-page="operations" hidden>
+      <div class="card operations-card">
+        <div class="operation-filters"><input id="transaction-search" type="search" data-i18n-placeholder="Поиск операций…" placeholder="Поиск операций…" data-i18n-aria-label="Поиск операций…" aria-label="Поиск операций…"><select id="account-filter" data-i18n-aria-label="Счета" aria-label="Счета"></select><select id="category-filter" data-i18n-aria-label="Категории" aria-label="Категории"></select><select id="direction-filter" data-i18n-aria-label="Направление" aria-label="Направление"><option value="" data-i18n="Все направления">Все направления</option><option value="DBIT" data-i18n="Расходы">Расходы</option><option value="CRDT" data-i18n="Доходы">Доходы</option></select></div>
+        <div class="section-heading operation-count"><span id="transaction-count" class="muted"></span><div class="segmented"><button id="tab-transactions" class="active" aria-pressed="true" data-i18n="Список">Список</button><button id="tab-days" aria-pressed="false" data-i18n="По дням">По дням</button></div></div>
+        <div id="transactions"></div><button id="load-more" class="secondary full-width" hidden data-i18n="Показать ещё">Показать ещё</button>
+      </div>
+    </section>
+    <section data-page="categories" hidden>
+      <div class="category-layout"><article class="card"><div class="section-heading"><h2 data-i18n="Бюджеты и активность">Бюджеты и активность</h2><span class="badge" id="category-count"></span></div><div id="category-manager" class="category-manager"></div></article>
+      <aside class="card category-create"><span class="form-symbol" data-icon="tag"></span><h2 data-i18n="Новая категория">Новая категория</h2><p class="muted" data-i18n="Задайте бюджет и следите за планом">Задайте бюджет и следите за планом</p>
+        <form id="category-form" class="category-form"><label class="field"><span data-i18n="Название">Название</span><input name="name" required maxlength="100" data-i18n-placeholder="Новая категория" placeholder="Новая категория"></label><label class="field"><span data-i18n="Выбрать иконку">Выбрать иконку</span><input class="category-icon-input" name="icon" value="🏷️" maxlength="4" readonly></label><label class="field"><span data-i18n="Бюджет">Бюджет</span><input name="budget" type="number" step="0.01" placeholder="0.00"></label><p class="form-hint muted" data-i18n="Отрицательный бюджет — ожидаемый доход">Отрицательный бюджет — ожидаемый доход</p><button type="submit"><span data-icon="plus"></span><span data-i18n="Добавить категорию">Добавить категорию</span></button></form>
+      </aside></div>
+    </section>
+    <section data-page="accounts" hidden>
+      <article class="account-overview"><div><span class="muted" data-i18n="Общий баланс">Общий баланс</span><strong id="accounts-total" class="hero-value">—</strong><span class="muted" data-i18n="По отслеживаемым счетам">По отслеживаемым счетам</span></div><button id="connect" data-connect><span data-icon="plus"></span><span data-i18n="Подключить Swedbank">Подключить Swedbank</span></button></article><div id="account-list"></div>
+    </section>
+    <details class="diagnostics"><summary data-i18n="Логи загрузки">Логи загрузки</summary><button id="retry-load" class="secondary" data-i18n="Повторить загрузку">Повторить загрузку</button><pre id="client-logs"></pre></details>
+  </main>
+  <dialog id="transaction-dialog" class="detail-dialog" aria-labelledby="detail-title"><div class="section-heading"><h2 id="detail-title" data-i18n="Операция">Операция</h2><button class="icon-button" data-close-detail data-i18n-aria-label="Закрыть" aria-label="Закрыть"><span data-icon="close"></span></button></div><div id="transaction-detail"></div></dialog>
+  <dialog id="split-modal" class="split-dialog" aria-labelledby="split-title"><div class="section-heading"><h2 id="split-title" data-i18n="Разделить трату">Разделить трату</h2><button id="split-close" class="icon-button" data-i18n-aria-label="Закрыть" aria-label="Закрыть"><span data-icon="close"></span></button></div><div id="split-expense-label" class="muted"></div><div id="split-rows"></div><button id="split-add" class="secondary" data-i18n="+ Добавить группу">+ Добавить группу</button><div id="split-total" class="expense-meta" role="status"></div><div class="modal-actions"><button id="split-cancel" class="secondary" data-i18n="Отмена">Отмена</button><button id="split-save" data-i18n="Сохранить">Сохранить</button></div></dialog>
+  <div id="icon-picker" class="icon-picker" hidden></div>
+  <dialog id="plan-item-dialog" class="plan-dialog" aria-labelledby="plan-item-title"><div class="section-heading"><h2 id="plan-item-title"></h2><button id="plan-item-close" class="icon-button" data-i18n-aria-label="Закрыть" aria-label="Закрыть"><span data-icon="close"></span></button></div><form id="plan-item-form"></form></dialog>
+  <script type="module" src="/static/app.js"></script><script type="module" src="/static/auth-controls.js"></script>
+</body>
+</html>

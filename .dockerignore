@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+secrets
+node_modules
+.vitest
+**/__pycache__
+*.pyc
+.security-reports
+graphify-out
+frontend-dist

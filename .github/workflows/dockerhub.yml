@@ -1,0 +1,210 @@
+name: Docker Hub
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Frontend tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Browser regression
+        # Match package-lock.json's Playwright version; browser and OS dependencies
+        # are preinstalled so runner apt-mirror outages cannot block this test.
+        run: |
+          docker run --rm -v "$PWD:/source:ro" -w /tmp/bank \
+            mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f \
+            sh -c 'cp -r /source/app /source/tests /source/scripts /source/package.json /source/package-lock.json . && npm ci && npm run test:browser'
+      - name: Check deployment scripts
+        run: |
+          bash -n deploy/finance-deploy.sh deploy/finance-deploy-ssh.sh
+          shellcheck deploy/finance-deploy.sh deploy/finance-deploy-ssh.sh
+
+  images:
+    name: Build and publish bank-${{ matrix.name }}
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # app and mcp share this image; Compose selects the MCP command.
+          - name: app
+            file: Dockerfile
+          - name: nginx
+            file: deploy/Dockerfile.nginx
+          - name: postgres
+            file: deploy/Dockerfile.postgres
+    env:
+      PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check Docker Hub configuration
+        if: env.PUBLISH == 'true'
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -z "$DOCKERHUB_USERNAME" || -z "$DOCKERHUB_TOKEN" ]]; then
+            echo '::error::Set repository variable DOCKERHUB_USERNAME and secret DOCKERHUB_TOKEN (Read & Write).'
+            exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ vars.DOCKERHUB_NAMESPACE || vars.DOCKERHUB_USERNAME || 'local' }}/bank-${{ matrix.name }}
+          flavor: latest=false
+          tags: |
+            type=sha,format=long
+            type=ref,event=pr
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+
+      - name: Build local image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64
+          load: true
+          pull: true
+          # Re-run apk upgrade even when the pinned base image has not changed.
+          no-cache: true
+          tags: |
+            bank-ci:${{ matrix.name }}
+            ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Check runtime
+        env:
+          IMAGE: bank-ci:${{ matrix.name }}
+          COMPONENT: ${{ matrix.name }}
+        run: |
+          case "$COMPONENT" in
+            app) docker run --rm "$IMAGE" python -c 'from app.main import app; from app.mcp_server import mcp' ;;
+            nginx) docker run --rm "$IMAGE" nginx -t ;;
+            postgres) docker run --rm "$IMAGE" postgres --version ;;
+          esac
+
+      - name: Check API authorization boundaries
+        if: matrix.name == 'app'
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro" -w /repo bank-ci:app python -m unittest -v
+          tests.test_service_auth tests.test_mcp_security tests.test_passi_token tests.test_auth_security
+          tests.test_remember_device tests.test_month_validation tests.test_transaction_dates
+          tests.test_server_proxy_security
+
+      - name: Check built frontend and cache headers
+        if: matrix.name == 'app'
+        run: docker run --rm -v "$PWD/tests:/tests:ro" bank-ci:app python -m unittest discover -s /tests -p test_frontend_cache.py -v
+
+      - name: Check tenant SQL and persistent bank callbacks
+        if: matrix.name == 'app'
+        run: |
+          network=bank-ci-callback
+          database=bank-ci-postgres
+          trap 'docker rm -f "$database" >/dev/null 2>&1 || true; docker network rm "$network" >/dev/null 2>&1 || true' EXIT
+          docker network create "$network"
+          docker run -d --name "$database" --network "$network" \
+            -e POSTGRES_DB=finance -e POSTGRES_USER=finance -e POSTGRES_PASSWORD=test-only-password \
+            postgres:18-alpine
+          for attempt in {1..30}; do
+            docker exec "$database" pg_isready -U finance -d finance && break
+            [[ $attempt == 30 ]] && exit 1
+            sleep 1
+          done
+          database_url=postgresql+asyncpg://finance:test-only-password@bank-ci-postgres:5432/finance
+          docker run --rm --network "$network" -e DATABASE_URL="$database_url" bank-ci:app \
+            python -c 'import asyncio; from app.startup import create_tables; asyncio.run(create_tables())'
+          docker run --rm --network "$network" -e DATABASE_URL="$database_url" \
+            -e TEST_DATABASE_URL="$database_url" \
+            -v "$PWD:/repo:ro" -w /repo bank-ci:app \
+            python -m unittest -v tests.test_bank_callback_security tests.test_schema_sql \
+              tests.test_category_budget tests.test_auto_sync tests.test_demo
+
+      - name: Check structured logging
+        if: matrix.name == 'app'
+        run: docker run --rm -v "$PWD/tests:/tests:ro" bank-ci:app python -m unittest discover -s /tests -p test_logging.py -v
+
+      - name: Scan for vulnerabilities
+        env:
+          IMAGE: bank-ci:${{ matrix.name }}
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.74.0 image --scanners vuln --exit-code 1 \
+            --severity HIGH,CRITICAL "$IMAGE"
+
+      - name: Log in to Docker Hub
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publish the scanned image
+        if: env.PUBLISH == 'true'
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"
+
+  deploy:
+    name: Deploy to mailu1024
+    needs: images
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: finance-production
+    steps:
+      - name: Deploy the published commit
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.FINANCE_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ vars.FINANCE_SSH_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.FINANCE_HOST }}
+          DEPLOY_USER: ${{ vars.FINANCE_SSH_USER }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          test -n "$DEPLOY_HOST" && test -n "$DEPLOY_USER"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          key="$HOME/.ssh/finance_deploy"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$GH_READ_TOKEN" | ssh -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA"

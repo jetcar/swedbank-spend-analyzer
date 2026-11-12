@@ -1,0 +1,16 @@
+{
+  "name": "swedbank-spend-analyzer-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-frontend.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:browser": "npm run build && node tests/ui-smoke.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Анализатор трат</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/theme.js"></script>
+  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/login.css">
+  <script type="module" src="/static/login.js"></script>
+</head>
+<body>
+  <main class="login-card">
+    <header>
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>finance</a>
+      <div class="toolbar"><button type="button" class="icon-button" data-theme-toggle data-i18n-aria-label="Тёмная тема" aria-label="Тёмная тема" aria-pressed="false">◐</button><select id="language" aria-label="Язык" data-i18n-aria-label="Язык">
+        <option value="ru">Русский</option>
+        <option value="en">English</option>
+        <option value="et">Eesti</option>
+      </select></div>
+    </header>
+    <div class="login-symbol" aria-hidden="true">↗</div><h1 data-i18n="Ваши финансы — в одном месте">Ваши финансы — в одном месте</h1>
+    <p class="intro" data-i18n="Войдите через Passi, чтобы открыть свои финансы.">Войдите через Passi, чтобы открыть свои финансы.</p>
+    <form action="/auth/start" method="get">
+      <input type="hidden" name="return_url" id="return-url" value="/">
+      <label class="remember">
+        <input type="checkbox" name="remember_device" value="true">
+        <span data-i18n="Запомнить это устройство на 30 дней">Запомнить это устройство на 30 дней</span>
+      </label>
+      <p class="hint" data-i18n="На личном устройстве вход сохранится после закрытия браузера. Кнопка «Выйти» завершит сессию.">На личном устройстве вход сохранится после закрытия браузера. Кнопка «Выйти» завершит сессию.</p>
+      <button type="submit" data-i18n="Войти через Passi">Войти через Passi</button>
+    </form>
+    <!-- Static FastAPI form; POST Origin and Sec-Fetch-Site are enforced by the gateway. -->
+    <!-- nosemgrep: python.django.security.django-no-csrf-token.django-no-csrf-token -->
+    <form action="/auth/demo/start" method="post" class="demo-entry">
+      <button type="submit" class="secondary" data-i18n="Демо">Демо</button>
+      <p class="demo-hint" data-i18n="Sandbox без сохранения данных. Можно начать заново в любой момент.">Sandbox без сохранения данных. Можно начать заново в любой момент.</p>
+    </form>
+    <footer><span class="muted" data-i18n="ЛИЧНЫЕ ФИНАНСЫ">ЛИЧНЫЕ ФИНАНСЫ</span><br><a href="/privacy" data-i18n="Конфиденциальность">Конфиденциальность</a></footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,77 @@
+name: Security scans
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scan:
+    name: Source, secrets, and workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine changed commit range
+        id: range
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            baseline="$PR_BASE_SHA"
+          elif [[ "$EVENT_NAME" == push && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            baseline="$BEFORE_SHA"
+          else
+            baseline="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$baseline^{commit}"
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+          echo "range=$baseline..HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Scan dependencies
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro" -w /repo
+          aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+          fs --scanners vuln --include-dev-deps --severity HIGH,CRITICAL
+          --exit-code 1 --no-progress --skip-version-check .
+
+      - name: Scan changed code with Semgrep
+        if: ${{ !cancelled() }}
+        env:
+          BASELINE: ${{ steps.range.outputs.baseline }}
+        run: >-
+          docker run --rm -v "$PWD:/src" -w /src
+          semgrep/semgrep@sha256:2e45517a85e13a9cca14a2a00df6bb48affd66b8ebfae1b0991cd57578362fb0
+          semgrep scan --config auto --error --baseline-commit "$BASELINE"
+          --exclude graphify-out .
+
+      - name: Scan changed history for secrets
+        if: ${{ !cancelled() }}
+        env:
+          COMMIT_RANGE: ${{ steps.range.outputs.range }}
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro"
+          zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --log-opts "$COMMIT_RANGE" --redact=100 --no-banner --exit-code 1
+
+      - name: Audit GitHub Actions workflows
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro" -w /repo
+          ghcr.io/zizmorcore/zizmor@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d
+          --min-confidence medium .github/workflows

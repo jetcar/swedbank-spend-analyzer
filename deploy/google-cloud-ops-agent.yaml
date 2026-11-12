@@ -1,0 +1,95 @@
+# Host configuration for mailu1024; keeps its existing Docker/syslog collection
+# and disabled host metrics. Install separately from the application rollout.
+logging:
+  receivers:
+    docker:
+      type: files
+      include_paths:
+        - /var/lib/docker/containers/*/*-json.log
+      record_log_file_path: true
+    finance_postgres:
+      type: files
+      include_paths:
+        - /var/lib/docker/volumes/finance_postgres_data/_data/finance-logs/*.json
+      record_log_file_path: true
+  processors:
+    docker_json:
+      type: parse_json
+      time_key: time
+      time_format: "%Y-%m-%dT%H:%M:%S.%L%Z"
+    docker_source:
+      type: modify_fields
+      fields:
+        labels.application:
+          copy_from: jsonPayload.attrs."com.docker.compose.project"
+        labels.service:
+          copy_from: jsonPayload.attrs."com.docker.compose.service"
+        labels.replica:
+          copy_from: jsonPayload.attrs."com.docker.compose.container-number"
+        labels.stream:
+          move_from: jsonPayload.stream
+        jsonPayload.message:
+          move_from: jsonPayload.log
+    event_json:
+      type: parse_json
+      field: message
+    nginx_error:
+      type: parse_regex
+      field: message
+      regex: '^(?<nginx_time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?<severity>\w+)\] (?<process_id>\d+)#(?<thread_id>\d+): (?<message>.*)$'
+    event_severity:
+      type: modify_fields
+      fields:
+        severity:
+          move_from: jsonPayload.severity
+          map_values:
+            warn: WARNING
+            error: ERROR
+            crit: CRITICAL
+            alert: ALERT
+            emerg: EMERGENCY
+            notice: NOTICE
+            info: INFO
+            debug: DEBUG
+    postgres_json:
+      type: parse_json
+      time_key: timestamp
+      time_format: "%Y-%m-%d %H:%M:%S.%L %Z"
+    postgres_fields:
+      type: modify_fields
+      fields:
+        labels.application:
+          static_value: finance
+        labels.service:
+          static_value: postgres
+        labels.replica:
+          static_value: "1"
+        jsonPayload.service:
+          static_value: postgres
+        jsonPayload.logger:
+          static_value: postgres
+        severity:
+          move_from: jsonPayload.error_severity
+          map_values:
+            LOG: INFO
+            FATAL: CRITICAL
+            PANIC: ALERT
+            DEBUG1: DEBUG
+            DEBUG2: DEBUG
+            DEBUG3: DEBUG
+            DEBUG4: DEBUG
+            DEBUG5: DEBUG
+  service:
+    pipelines:
+      docker:
+        receivers: [docker]
+        processors: [docker_json, docker_source, event_json, nginx_error, event_severity]
+      finance_postgres:
+        receivers: [finance_postgres]
+        processors: [postgres_json, postgres_fields]
+
+metrics:
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: []

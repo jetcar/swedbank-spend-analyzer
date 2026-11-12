@@ -1,0 +1,12 @@
+.env
+.env.server
+__pycache__/
+*.py[cod]
+.venv/
+postgres_data/
+secrets/
+node_modules/
+.vitest/
+.security-reports/
+graphify-out/
+frontend-dist/

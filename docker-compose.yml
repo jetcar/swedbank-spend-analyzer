@@ -1,0 +1,107 @@
+services:
+  app:
+    build: .
+    env_file:
+      - ${APP_ENV_FILE:-.env}
+    environment:
+      ENABLE_BANKING_API_URL: http://bank-egress:8080
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ./app:/app/app:ro
+      - ./secrets/enablebanking.pem:/run/secrets/enablebanking_private_key:ro
+      - ${DEMO_BANK_KEY_FILE:-./secrets/enablebanking.pem}:/run/secrets/enablebanking_demo_private_key:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bank-egress:
+        condition: service_started
+
+  mcp:
+    build: .
+    command: ["python", "-m", "app.mcp_server"]
+    environment:
+      APP_BASE_URL: http://app:8000
+      APP_PUBLIC_URL: http://localhost:8000
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8001
+      MCP_CLIENT_TOKEN: ${MCP_CLIENT_TOKEN:-local-development-mcp-token}
+      MCP_ALLOWED_HOSTS: mcp:8001,127.0.0.1:8001,localhost:8001
+      MCP_ALLOWED_ORIGINS: http://localhost:8001,http://127.0.0.1:8001
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      app:
+        condition: service_started
+
+  postgres:
+    image: bank-postgres:local
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-spend_analyzer}
+      POSTGRES_USER: ${POSTGRES_USER:-spend_analyzer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    image: bank-nginx:local
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+    networks: [private, ingress]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    volumes:
+      - ./deploy/nginx-gateway.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: [app, mcp]
+
+  bank-egress:
+    image: bank-nginx:local
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    networks: [private, internet]
+    volumes:
+      - ./deploy/nginx-egress.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  private:
+    internal: true
+  internet: {}
+  ingress: {}
+
+volumes:
+  postgres_data:

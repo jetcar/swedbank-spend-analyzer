@@ -1,0 +1,4 @@
+- [x] MCP Docker service starts on port 8001
+- [x] MCP exposes bank, account, transaction, category, expense, summary, and daily tools
+- [x] MCP authorization URL and sync flow are available
+- [x] MCP protocol smoke test passes

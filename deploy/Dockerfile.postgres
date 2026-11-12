@@ -1,0 +1,10 @@
+FROM postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+
+# Keep PostgreSQL 16 and its data layout. Replace the bundled old Go-based
+# privilege helper with Alpine's native equivalent; retain the upstream init flow.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache su-exec \
+    && test -x /sbin/su-exec \
+    && grep -q 'exec gosu postgres' /usr/local/bin/docker-entrypoint.sh \
+    && sed -i 's|exec gosu postgres|exec /sbin/su-exec postgres|' /usr/local/bin/docker-entrypoint.sh \
+    && rm /usr/local/bin/gosu /usr/local/bin/su-exec

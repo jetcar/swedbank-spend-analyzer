@@ -1,0 +1,159 @@
+name: finance
+
+# Ops Agent reads Docker's JSON records, including these Compose source labels.
+x-logging: &cloud-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "com.docker.compose.project,com.docker.compose.service,com.docker.compose.container-number"
+
+services:
+  app:
+    logging: *cloud-logging
+    image: ${APP_IMAGE:-jetcar/bank-app:latest}
+    restart: unless-stopped
+    mem_limit: 384m
+    env_file: .env.server
+    environment:
+      ENABLE_BANKING_API_URL: http://bank-egress:8080
+      AUTO_SYNC_ENABLED: ${AUTO_SYNC_ENABLED:-1}
+      AUTO_SYNC_INTERVAL_SECONDS: ${AUTO_SYNC_INTERVAL_SECONDS:-21600}
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ./secrets/enablebanking.pem:/run/secrets/enablebanking_private_key:ro
+      - ${DEMO_BANK_KEY_FILE:-./secrets/enablebanking.pem}:/run/secrets/enablebanking_demo_private_key:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bank-egress:
+        condition: service_started
+
+  mcp:
+    logging: *cloud-logging
+    image: ${APP_IMAGE:-jetcar/bank-app:latest}
+    command: [python, -m, app.mcp_server]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      APP_BASE_URL: http://app:8000
+      APP_PUBLIC_URL: https://finance.passi.cloud
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8001
+      MCP_OAUTH_ENABLED: "1"
+      MCP_ALLOWED_HOSTS: finance.passi.cloud,mcp:8001,127.0.0.1:18000,127.0.0.1:8001,localhost:8001
+      MCP_ALLOWED_ORIGINS: https://finance.passi.cloud
+      PASSI_ISSUER: ${PASSI_ISSUER:-https://passi.cloud/openidc}
+      PASSI_JWKS_ENDPOINT: ${PASSI_JWKS_ENDPOINT:-https://passi.cloud/openidc/.well-known/jwks}
+      PASSI_EGRESS_BASE_URL: http://bank-egress:8080
+      PASSI_RESOURCE: ${PASSI_RESOURCE:-https://finance.passi.cloud/mcp}
+      PASSI_ALLOWED_EMAILS: ${PASSI_ALLOWED_EMAILS:?Set PASSI_ALLOWED_EMAILS in .env.server}
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on:
+      app:
+        condition: service_healthy
+      bank-egress:
+        condition: service_started
+
+  postgres:
+    logging: *cloud-logging
+    image: ${POSTGRES_IMAGE:-jetcar/bank-postgres:latest}
+    command:
+      - postgres
+      - -c
+      - logging_collector=on
+      - -c
+      - log_destination=jsonlog
+      - -c
+      - log_directory=finance-logs
+      - -c
+      - log_filename=postgresql-%H.log
+      - -c
+      - log_rotation_age=1h
+      - -c
+      - log_rotation_size=0
+      - -c
+      - log_truncate_on_rotation=on
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finance}
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.server}
+    networks: [private]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    logging: *cloud-logging
+    image: ${NGINX_IMAGE:-jetcar/bank-nginx:latest}
+    entrypoint: [nginx, -g, "daemon off;"]
+    restart: unless-stopped
+    mem_limit: 64m
+    ports:
+      - "127.0.0.1:${FINANCE_PORT:-18000}:8000"
+    networks:
+      private: {}
+      proxy:
+        aliases: [finance-gateway]
+    dns: [127.0.0.1]
+    dns_opt: ["timeout:1", "attempts:1"]
+    volumes:
+      - ./deploy/nginx-server.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      app:
+        condition: service_healthy
+      mcp:
+        condition: service_started
+
+  bank-egress:
+    logging: *cloud-logging
+    image: ${NGINX_IMAGE:-jetcar/bank-nginx:latest}
+    entrypoint: [nginx, -g, "daemon off;"]
+    restart: unless-stopped
+    mem_limit: 64m
+    networks: [private, internet]
+    volumes:
+      - ./deploy/nginx-egress.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  private:
+    internal: true
+  internet: {}
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-passi_haproxy_net}
+
+volumes:
+  postgres_data:
