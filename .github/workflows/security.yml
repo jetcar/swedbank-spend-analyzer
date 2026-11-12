@@ -36,8 +36,10 @@ jobs:
             baseline="$PR_BASE_SHA"
           elif [[ "$EVENT_NAME" == push && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
             baseline="$BEFORE_SHA"
+          elif baseline="$(git rev-parse HEAD^ 2>/dev/null)"; then
+            :
           else
-            baseline="$(git rev-parse HEAD^)"
+            baseline="$GITHUB_SHA"
           fi
           git cat-file -e "$baseline^{commit}"
           echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
