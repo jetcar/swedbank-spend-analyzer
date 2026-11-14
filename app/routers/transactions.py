@@ -13,11 +13,12 @@ router = APIRouter()
 async def list_transactions(
     limit: int = Query(default=100, ge=1, le=1000),
     month: str | None = Query(default=None),
+    days: int | None = Query(default=None, ge=1, le=30),
     owner_id: str = Depends(dependencies.current_owner_id),
     before_id: int | None = None,
     page_by_id: bool = False,
 ) -> list[dict[str, Any]]:
-    return await transactions_service.list_transactions(limit=limit, month=month, owner_id=owner_id, before_id=before_id, page_by_id=page_by_id)
+    return await transactions_service.list_transactions(limit=limit, month=month, days=days, owner_id=owner_id, before_id=before_id, page_by_id=page_by_id)
 
 
 @router.patch("/api/transactions/{transaction_id}/statistics")

@@ -84,5 +84,16 @@ export function createTransactionsView({ state, fetchJson, reload, openSplit }) 
     };
     $('[data-close-detail]').onclick = () => $('#transaction-dialog').close();
   }
-  return { bind, render() { renderFilters(); renderTransactions(); }, resetLimit() { visibleLimit = 100; }, renderRow: transactionRow, bindRows: bindTransactionRows };
+  function openCategory(categoryId) {
+    $('#transaction-search').value = '';
+    $('#account-filter').value = '';
+    $('#direction-filter').value = '';
+    const filter = $('#category-filter');
+    filter.value = String(categoryId);
+    visibleLimit = 100;
+    renderTransactions();
+    location.hash = 'operations';
+  }
+
+  return { bind, render() { renderFilters(); renderTransactions(); }, resetLimit() { visibleLimit = 100; }, openCategory, renderRow: transactionRow, bindRows: bindTransactionRows };
 }

@@ -123,6 +123,23 @@ try {
   assert.equal(await page.locator('#last-sync-time').textContent(),'Ещё не выполнялась');
   assert.match(await page.locator('#total-balance').innerText(),/999/);
   assert.equal(await page.locator('#recent-transactions img').count(),0);
+  assert.equal(await page.locator('#budget-summary [data-overview-category]').count(),categories.length);
+  await page.locator('[data-view="operations"]').click();
+  await page.locator('#transaction-search').fill('stale search');
+  await page.locator('#account-filter').selectOption('1');
+  await page.locator('#direction-filter').selectOption('CRDT');
+  await page.locator('[data-view="overview"]').click();
+  await page.locator('[data-overview-category="1"]').click();
+  await page.waitForFunction(()=>location.hash==='#operations');
+  assert.equal(await page.locator('#category-filter').inputValue(),'1');
+  assert.equal(await page.locator('#transaction-search').inputValue(),'');
+  assert.equal(await page.locator('#account-filter').inputValue(),'');
+  assert.equal(await page.locator('#direction-filter').inputValue(),'');
+  assert.equal(await page.locator('#transactions .transaction-row').count(),0);
+  await page.locator('[data-view="overview"]').click();
+  await page.locator('#chart-range').selectOption('1');
+  assert.equal(await page.locator('#cashflow .chart-income').count(),1);
+  await page.locator('#chart-range').selectOption('30');
   const layoutWidths = [1440,1100,900,768,761,760,375];
   const assertHeaderControlsFit = async width => {
     for (const control of await page.locator('.sidebar-footer select, .sidebar-footer button:not([hidden])').all()) {
