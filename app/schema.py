@@ -150,7 +150,7 @@ async def _upgrade_tenant_schema(connection, schema: str, owner_id: str) -> None
             RETURN NULL;
         END; $$ LANGUAGE plpgsql SET search_path = pg_catalog
     """, schema))
-    for table_name in ("accounts", "transactions", "categories", "expense_splits", "plan_items", "plan_item_transactions"):
+    for table_name in ("accounts", "transactions", "categories", "category_rules", "expense_splits", "plan_items", "plan_item_transactions"):
         await connection.execute(_tenant_ddl("DROP TRIGGER IF EXISTS data_changed ON %(schema)s.%(table)s", schema, table=table_name))
         await connection.execute(_tenant_ddl("""
             CREATE TRIGGER data_changed AFTER INSERT OR UPDATE OR DELETE ON %(schema)s.%(table)s

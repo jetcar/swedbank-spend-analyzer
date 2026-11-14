@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import database, dates, schemas
-from app.models import Account, BankSession, Category, ExpenseSplit, Transaction
+from app.services import category_rules
+from app.models import Account, BankSession, Category, CategoryRule, ExpenseSplit, Transaction
 
 
 CATEGORY_DEFAULTS = {
@@ -91,6 +92,8 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
     selected_month = month or dates.current_month()
     async with database.tenant_session(owner_id) as db:
         categories = await ensure_month_categories(db, owner_id, selected_month, language)
+        if await category_rules.apply_category_rules(db, owner_id, month=selected_month):
+            await db.commit()
         start, end = dates.month_bounds(selected_month)
         # Aggregate the complete month, independently of expense list limits.
         effective_date = func.coalesce(Transaction.booking_date, Transaction.value_date)
@@ -155,6 +158,7 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             raise HTTPException(404, "Category not found")
         if settings.name is not None:
             if settings.name != category.name:
+                old_name = category.name
                 duplicate = await db.scalar(
                     select(Category.id).where(
                         Category.owner_id == owner_id,
@@ -165,6 +169,9 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
                 if duplicate is not None:
                     raise HTTPException(409, "Category already exists for this month")
                 category.name = settings.name
+                await db.execute(update(CategoryRule).where(
+                    CategoryRule.owner_id == owner_id, CategoryRule.category_name == old_name,
+                ).values(category_name=settings.name))
             category.name_customized = True
         if settings.budget is not None:
             category.budget = settings.budget

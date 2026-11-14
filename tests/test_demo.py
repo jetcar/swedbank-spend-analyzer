@@ -1,5 +1,5 @@
 """Demo requests must never reach persistent storage or another visitor."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 import asyncio
 import base64
@@ -9,6 +9,7 @@ import unittest
 from itsdangerous import TimestampSigner
 from starlette.middleware.sessions import SessionMiddleware
 import httpx
+from sqlalchemy import select
 
 from app import bank_client, database, demo, main, passi_auth
 from app.routers import events as events_router
@@ -146,6 +147,31 @@ class DemoTest(unittest.IsolatedAsyncioTestCase):
             await self.connect_and_import()
             self.assertEqual(len((await self.client.get("/api/transactions")).json()), 2)
             self.assertEqual((await self.client.get("/api/accounts")).json()[0]["balance"], "-20.00")
+
+    async def test_manual_category_is_remembered_for_matching_expenses(self):
+        with self.bank_mock(), patch.object(bank_client, "make_jwt", return_value="sandbox-jwt"):
+            await self.connect_and_import()
+        transactions = (await self.client.get("/api/transactions")).json()
+        category_id = (await self.client.get("/api/categories?month=2026-11")).json()[0]["id"]
+        response = await self.client.patch(
+            f'/api/expenses/{transactions[0]["id"]}/category', json={"category_id": category_id},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["auto_assigned"], 1)
+        assigned = (await self.client.get("/api/transactions")).json()
+        self.assertEqual({row["category_id"] for row in assigned}, {category_id})
+
+        from app.models import Account, Transaction
+        async with demo.store.database(self.owner) as db:
+            account_id = await db.scalar(select(Account.id))
+            db.add(Transaction(
+                account_id=account_id, external_id="future", booking_date=datetime(2026, 11, 3, tzinfo=timezone.utc),
+                amount=5, currency="EUR", direction="DBIT", description="Sandbox purchase", raw_data={},
+            ))
+            await db.commit()
+        await self.client.get("/api/categories?month=2026-11")
+        future = next(row for row in (await self.client.get("/api/transactions")).json() if row["description"] == "Sandbox purchase" and row["id"] not in {item["id"] for item in transactions})
+        self.assertEqual(future["category_id"], category_id)
 
     async def test_live_bank_credentials_cannot_be_used_in_demo(self):
         with self.bank_mock(environment="PRODUCTION"), patch.object(bank_client, "make_jwt", return_value="test-jwt"):

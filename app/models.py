@@ -101,6 +101,20 @@ class Category(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class CategoryRule(Base):
+    __tablename__ = "category_rules"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "merchant_key", name="uq_category_rule_owner_merchant"),
+        {"schema": TENANT_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(320), index=True)
+    merchant_key: Mapped[str] = mapped_column(String(500))
+    category_name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (

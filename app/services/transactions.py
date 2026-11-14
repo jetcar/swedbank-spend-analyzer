@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 
 from app import database, dates, schemas
+from app.services import category_rules
 from app.transaction_details import transaction_counterparty_name
 from app.models import Account, BankSession, Category, ExpenseSplit, Transaction
 
@@ -152,6 +153,7 @@ async def assign_expense(*, expense_id: int, assignment: schemas.CategoryAssignm
             select(Category.id).where(Category.owner_id == owner_id, Category.id == assignment.category_id)
         ) is None:
             raise HTTPException(404, "Category not found")
+        category = None
         if assignment.category_id is not None:
             category = await db.scalar(
                 select(Category).where(Category.owner_id == owner_id, Category.id == assignment.category_id)
@@ -160,8 +162,13 @@ async def assign_expense(*, expense_id: int, assignment: schemas.CategoryAssignm
                 raise HTTPException(400, "Category belongs to another month")
         expense.category_id = assignment.category_id
         await db.execute(delete(ExpenseSplit).where(ExpenseSplit.transaction_id == expense_id))
+        if category is None:
+            await category_rules.forget_category_rule(db, owner_id, expense)
+            auto_assigned = 0
+        else:
+            auto_assigned = await category_rules.remember_category_rule(db, owner_id, expense, category)
         await db.commit()
-    return {"id": expense_id, "category_id": assignment.category_id}
+    return {"id": expense_id, "category_id": assignment.category_id, "auto_assigned": auto_assigned}
 
 
 async def split_expense(*, expense_id: int, assignment: schemas.ExpenseSplitAssignment, owner_id: str) -> dict[str, Any]:
