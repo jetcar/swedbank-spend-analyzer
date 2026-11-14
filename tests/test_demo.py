@@ -38,6 +38,7 @@ class DemoTest(unittest.IsolatedAsyncioTestCase):
                     "booking_date": "2026-11-02" if second else "2026-11-01",
                     "transaction_amount": {"amount": "7.50" if second else "12.50", "currency": "EUR"},
                     "credit_debit_indicator": "DBIT", "remittance_information": ["Sandbox purchase"],
+                    "creditor": {"name": "Sandbox Shop"},
                 }], **({} if second else {"continuation_key": "next"})})
             raise AssertionError(f"Unexpected bank request: {request.method} {path}")
 
@@ -160,13 +161,15 @@ class DemoTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["auto_assigned"], 1)
         assigned = (await self.client.get("/api/transactions")).json()
         self.assertEqual({row["category_id"] for row in assigned}, {category_id})
+        await self.client.get("/api/categories?month=2026-11&language=en")
 
         from app.models import Account, Transaction
         async with demo.store.database(self.owner) as db:
             account_id = await db.scalar(select(Account.id))
             db.add(Transaction(
                 account_id=account_id, external_id="future", booking_date=datetime(2026, 11, 3, tzinfo=timezone.utc),
-                amount=5, currency="EUR", direction="DBIT", description="Sandbox purchase", raw_data={},
+                amount=5, currency="EUR", direction="DBIT", description="Sandbox purchase",
+                raw_data={"creditor": {"name": "Sandbox Shop"}},
             ))
             await db.commit()
         await self.client.get("/api/categories?month=2026-11")

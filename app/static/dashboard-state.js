@@ -1,5 +1,5 @@
 import { buildCategoryQuery } from './expense-domain.js';
-import { loadMonthTransactions } from './finance-domain.js';
+import { loadMonthTransactions, loadRecentTransactions } from './finance-domain.js';
 
 export function createDashboardState(today = new Date()) {
   return {
@@ -23,7 +23,7 @@ export function createDashboardLoader({ state, fetchJson, getLanguage, onLoaded 
         fetchJson('/api/accounts'),
         categories,
         loadMonthTransactions(fetchJson, month),
-        fetchJson('/api/transactions?limit=1000&days=30'),
+        loadRecentTransactions(fetchJson, 30),
         fetchJson('/api/sync'),
         categories.then(() => fetchJson(buildCategoryQuery('/api/plan', month, language))),
       ]);

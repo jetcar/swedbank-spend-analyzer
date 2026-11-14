@@ -85,6 +85,9 @@ export function createTransactionsView({ state, fetchJson, reload, openSplit }) 
     $('[data-close-detail]').onclick = () => $('#transaction-dialog').close();
   }
   function openCategory(categoryId) {
+    $('#transaction-search').value = '';
+    $('#account-filter').value = '';
+    $('#direction-filter').value = '';
     const filter = $('#category-filter');
     filter.value = String(categoryId);
     visibleLimit = 100;

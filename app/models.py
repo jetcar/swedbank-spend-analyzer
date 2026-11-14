@@ -112,6 +112,7 @@ class CategoryRule(Base):
     owner_id: Mapped[str] = mapped_column(String(320), index=True)
     merchant_key: Mapped[str] = mapped_column(String(500))
     category_name: Mapped[str] = mapped_column(String(100))
+    category_icon: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 

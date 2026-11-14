@@ -43,10 +43,16 @@ export function buildCashflowDays(rows, range, now = new Date()) {
   return days;
 }
 export async function loadMonthTransactions(fetchJson, month) {
+  return loadTransactionPages(fetchJson, `month=${encodeURIComponent(month)}`);
+}
+export async function loadRecentTransactions(fetchJson, days = 30) {
+  return loadTransactionPages(fetchJson, `days=${encodeURIComponent(days)}`);
+}
+async function loadTransactionPages(fetchJson, query) {
   const rows = [];
   let before = '';
   for (;;) {
-    const page = await fetchJson(`/api/transactions?limit=1000&page_by_id=true&month=${encodeURIComponent(month)}${before}`);
+    const page = await fetchJson(`/api/transactions?limit=1000&page_by_id=true&${query}${before}`);
     rows.push(...page);
     if (page.length < 1000) break;
     const lastId = page.at(-1).id;

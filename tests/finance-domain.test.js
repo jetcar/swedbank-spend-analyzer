@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { buildCashflowDays, currencyTotals, filterTransactions, loadMonthTransactions } from '../app/static/finance-domain.js';
+import { buildCashflowDays, currencyTotals, filterTransactions, loadMonthTransactions, loadRecentTransactions } from '../app/static/finance-domain.js';
 test('totals preserve cents beyond floating point precision and keep currencies separate', () => {
   expect(currencyTotals([
     {currency:'EUR',amount_exact:'9999999999999999.99'},
@@ -46,4 +46,12 @@ test('loads every page before totals and sorts by banking date, independently of
 test('a failed page never returns a partial month as complete', async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(Array.from({length:1000},(_,i) => ({id:1001-i}))).mockRejectedValueOnce(new Error('offline'));
   await expect(loadMonthTransactions(fetcher,'2026-11')).rejects.toThrow('offline');
+});
+test('loads every recent transaction page for the chart', async () => {
+  const first = Array.from({length:1000},(_,i) => ({id:1001-i,date:'2026-11-14'}));
+  const fetcher = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce([{id:1,date:'2026-10-16'}]);
+  const result = await loadRecentTransactions(fetcher, 30);
+  expect(fetcher.mock.calls[0][0]).toContain('days=30');
+  expect(fetcher.mock.calls[1][0]).toContain('before_id=2');
+  expect(result).toHaveLength(1001);
 });

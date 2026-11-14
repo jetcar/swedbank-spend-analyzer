@@ -28,7 +28,8 @@ async def list_transactions(*, limit: int, month: str | None, days: int | None, 
             start, end = dates.month_bounds(month)
             filters.extend([effective_date >= start, effective_date < end])
         if days:
-            filters.append(effective_date >= datetime.now(timezone.utc) - timedelta(days=days))
+            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            filters.append(effective_date >= today - timedelta(days=days - 1))
         if before_id is not None:
             filters.append(Transaction.id < before_id)
         transactions = list(
