@@ -25,6 +25,23 @@ export function filterTransactions(rows, { search = '', account = '', category =
     && (!category || (category === 'none' ? row.category_id == null && !row.splits?.length
       : row.category_id === Number(category) || row.splits?.some(part => part.category_id === Number(category)))));
 }
+export function buildCashflowDays(rows, range, now = new Date()) {
+  const length = Math.max(1, Math.min(30, Number(range) || 30));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const days = Array.from({ length }, (_, index) => {
+    const value = new Date(end);
+    value.setUTCDate(value.getUTCDate() - (length - index - 1));
+    return { date: value.toISOString().slice(0, 10), income: 0, expense: 0 };
+  });
+  const byDate = new Map(days.map(day => [day.date, day]));
+  for (const row of rows) {
+    const day = byDate.get(row.date?.slice(0, 10));
+    if (day && ['CRDT', 'DBIT'].includes(row.direction)) {
+      day[row.direction === 'CRDT' ? 'income' : 'expense'] += Math.abs(Number(row.amount_exact ?? row.amount) || 0);
+    }
+  }
+  return days;
+}
 export async function loadMonthTransactions(fetchJson, month) {
   const rows = [];
   let before = '';

@@ -129,6 +129,9 @@ try {
   assert.equal(await page.locator('#category-filter').inputValue(),'1');
   assert.equal(await page.locator('#transactions .transaction-row').count(),0);
   await page.locator('[data-view="overview"]').click();
+  await page.locator('#chart-range').selectOption('1');
+  assert.equal(await page.locator('#cashflow .chart-income').count(),1);
+  await page.locator('#chart-range').selectOption('30');
   const layoutWidths = [1440,1100,900,768,761,760,375];
   const assertHeaderControlsFit = async width => {
     for (const control of await page.locator('.sidebar-footer select, .sidebar-footer button:not([hidden])').all()) {

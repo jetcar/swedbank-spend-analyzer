@@ -1,5 +1,5 @@
 from typing import Any
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
@@ -20,13 +20,15 @@ def planning_month(transaction: Transaction) -> str | None:
     return value.astimezone(timezone.utc).strftime("%Y-%m")
 
 
-async def list_transactions(*, limit: int, month: str | None, owner_id: str, before_id: int | None, page_by_id: bool) -> list[dict[str, Any]]:
+async def list_transactions(*, limit: int, month: str | None, days: int | None, owner_id: str, before_id: int | None, page_by_id: bool) -> list[dict[str, Any]]:
     async with database.tenant_session(owner_id) as db:
         filters = [Account.monitored.is_(True)]
         effective_date = func.coalesce(Transaction.booking_date, Transaction.value_date)
         if month:
             start, end = dates.month_bounds(month)
             filters.extend([effective_date >= start, effective_date < end])
+        if days:
+            filters.append(effective_date >= datetime.now(timezone.utc) - timedelta(days=days))
         if before_id is not None:
             filters.append(Transaction.id < before_id)
         transactions = list(
