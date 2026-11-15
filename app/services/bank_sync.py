@@ -1,4 +1,5 @@
 from contextlib import aclosing
+from datetime import datetime
 from decimal import Decimal
 from hashlib import sha256
 from typing import Any
@@ -17,8 +18,8 @@ _CARD_DATE_RE = re.compile(r"(?<!\d)(\d{2}\.\d{2}\.\d{2})(?!\d)")
 _CARD_TIME_RE = re.compile(r"(?<!\d)\d{2}:\d{2}(?!\d)")
 _INSTALLMENT_PREFIX_RE = re.compile(r"\bIntressivaba\s+kuni\s+\d{2}\.\d{2}\.\d{4};?", re.IGNORECASE)
 _CARD_NOISE_WORDS = {"EUR", "INTRESSIVABA", "KUNI", "OST", "SULARAHA"}
-_CARD_MERCHANT_ALIASES = {"OISMÄE": "OISMAE"}
 _BOOKED_STATUSES = {"BOOK", "BOOKED"}
+_CARD_SETTLEMENT_WINDOW_DAYS = 21
 
 
 def _remittance_text(data: dict[str, Any]) -> str:
@@ -37,12 +38,10 @@ def _card_merchant_words(data: dict[str, Any]) -> list[str]:
     merchant = re.sub(r"(?<!\w)\w*\d\w*(?!\w)", " ", merchant)
     merchant = re.sub(r"(?<!\w)[+-]?\d+(?:[.,]\d+)?(?!\w)", " ", merchant)
     words = [
-        _CARD_MERCHANT_ALIASES.get(word.upper(), word.upper())
+        word.upper()
         for word in re.findall(r"[^\W\d_]+", merchant, re.UNICODE)
         if word.upper() not in _CARD_NOISE_WORDS
     ]
-    if words[-4:] == ["HESBURGER", "TURKU", "FI", "FI"]:
-        words = words[:-2]
     while words[-1:] == ["EE"]:
         words.pop()
     return words
@@ -108,6 +107,73 @@ def card_transaction_variant(data: dict[str, Any]) -> str | None:
 
 def _status(data: dict[str, Any]) -> str:
     return str(data.get("status") or "").upper()
+
+
+def _card_number(data: dict[str, Any]) -> str | None:
+    match = _CARD_NUMBER_RE.search(_remittance_text(data))
+    return match.group(1) if match else None
+
+
+def _card_record_date(data: dict[str, Any]):
+    for key in ("booking_date", "value_date", "transaction_date"):
+        if parsed := dates.parse_datetime(data.get(key)):
+            return parsed.date()
+    match = _CARD_DATE_RE.search(_remittance_text(data))
+    if match:
+        return datetime.strptime(match.group(1), "%d.%m.%y").date()
+    return None
+
+
+def _same_card_amount(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    first_amount, first_currency = _transaction_amount(first)
+    second_amount, second_currency = _transaction_amount(second)
+    return (
+        bool(_card_number(first))
+        and _card_number(first) == _card_number(second)
+        and first_amount is not None
+        and first_amount == second_amount
+        and first_currency == second_currency
+        and first.get("credit_debit_indicator") == second.get("credit_debit_indicator")
+    )
+
+
+def _is_card_authorization(data: dict[str, Any]) -> bool:
+    text = _remittance_text(data)
+    return _status(data) == "PDNG" and bool(_CARD_TIME_RE.search(text)) and not _INSTALLMENT_PREFIX_RE.search(text)
+
+
+def _is_card_settlement(data: dict[str, Any]) -> bool:
+    text = _remittance_text(data)
+    return (
+        _status(data) in _BOOKED_STATUSES
+        or bool(_INSTALLMENT_PREFIX_RE.search(text))
+        or (_status(data) == "PDNG" and not _CARD_TIME_RE.search(text))
+    )
+
+
+def _is_card_authorization_settlement_pair(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    return (
+        _is_card_authorization(first) and _is_card_settlement(second)
+    ) or (
+        _is_card_authorization(second) and _is_card_settlement(first)
+    )
+
+
+def _can_merge_card_authorization_settlement(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    if _is_card_authorization(first) and _is_card_settlement(second):
+        authorization, settlement = first, second
+    elif _is_card_authorization(second) and _is_card_settlement(first):
+        authorization, settlement = second, first
+    else:
+        return False
+    if not _same_card_amount(authorization, settlement):
+        return False
+    authorization_date = _card_record_date(authorization)
+    settlement_date = _card_record_date(settlement)
+    if authorization_date is None or settlement_date is None:
+        return False
+    age = (settlement_date - authorization_date).days
+    return 0 <= age <= _CARD_SETTLEMENT_WINDOW_DAYS
 
 
 def _is_pending_booked_transition(first: dict[str, Any], second: dict[str, Any]) -> bool:
@@ -213,6 +279,8 @@ def _can_merge_card_transactions(
 
 
 def can_merge_card_transactions(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    if _is_card_authorization_settlement_pair(first, second):
+        return _can_merge_card_authorization_settlement(first, second)
     return _can_merge_card_transactions(first, second, compact_merchant=False)
 
 
@@ -320,7 +388,8 @@ async def _matching_card_transactions(
     currency: str | None,
     exclude_id: int | None = None,
 ) -> list[Transaction]:
-    if card_transaction_match_key(raw) is None or amount is None:
+    has_card_identity = _card_number(raw) is not None and _card_record_date(raw) is not None
+    if amount is None or (card_transaction_match_key(raw) is None and not has_card_identity):
         return []
     candidates = list(
         (
@@ -339,7 +408,8 @@ async def _matching_card_transactions(
     exact_matches = [
         candidate
         for candidate in candidates
-        if can_merge_card_transactions(candidate.raw_data or {}, raw)
+        if not _is_card_authorization_settlement_pair(candidate.raw_data or {}, raw)
+        and _can_merge_card_transactions(candidate.raw_data or {}, raw, compact_merchant=False)
     ]
     known_provider_matches = [
         candidate
@@ -348,20 +418,30 @@ async def _matching_card_transactions(
     ]
     if known_provider_matches:
         return known_provider_matches
+    settlement_matches = [
+        candidate
+        for candidate in candidates
+        if _can_merge_card_authorization_settlement(candidate.raw_data or {}, raw)
+    ]
+    settlement_match = min(settlement_matches, key=lambda candidate: candidate.id) if settlement_matches else None
     compact_matches = [
         candidate
         for candidate in candidates
-        if _can_merge_card_transactions(candidate.raw_data or {}, raw, compact_merchant=True)
+        if not _is_card_authorization_settlement_pair(candidate.raw_data or {}, raw)
+        and _can_merge_card_transactions(candidate.raw_data or {}, raw, compact_merchant=True)
     ]
     if not exact_matches:
-        return compact_matches
+        if compact_matches:
+            return compact_matches + ([settlement_match] if settlement_match is not None else [])
+        return [settlement_match] if settlement_match is not None else []
     if all(
         _is_repeated_pending_transaction(candidate.raw_data or {}, raw)
         for candidate in exact_matches
     ):
         exact_ids = {candidate.id for candidate in exact_matches}
-        return exact_matches + [candidate for candidate in compact_matches if candidate.id not in exact_ids]
-    return exact_matches
+        matches = exact_matches + [candidate for candidate in compact_matches if candidate.id not in exact_ids]
+        return matches + ([settlement_match] if settlement_match is not None else [])
+    return exact_matches + ([settlement_match] if settlement_match is not None else [])
 
 
 async def _upsert_transaction(db, account: Account, raw: dict[str, Any]) -> bool:
@@ -381,6 +461,8 @@ async def _upsert_transaction(db, account: Account, raw: dict[str, Any]) -> bool
         currency,
         exclude_id=existing.id if existing is not None else None,
     )
+    if existing is not None and (existing.raw_data or {}).get("_card_authorization_merged"):
+        matches = []
     if existing is not None and _is_known_provider_transaction(existing.raw_data or {}, raw):
         matches = []
     cross_matches = [candidate for candidate in matches if existing is None or candidate.id != existing.id]
@@ -401,6 +483,10 @@ async def _upsert_transaction(db, account: Account, raw: dict[str, Any]) -> bool
 
     if logical_rows:
         survivor = min(logical_rows, key=lambda row: row.id)
+        merged_card_authorization = any(
+            _can_merge_card_authorization_settlement(row.raw_data or {}, raw)
+            for row in cross_matches
+        )
         incoming_status = _status(raw)
         booked_row = next(
             (row for row in logical_rows if _status(row.raw_data or {}) in _BOOKED_STATUSES),
@@ -472,6 +558,10 @@ async def _upsert_transaction(db, account: Account, raw: dict[str, Any]) -> bool
         survivor.direction = authoritative_direction
         survivor.description = authoritative_description
         merged_raw = _raw_data_with_first_dates(survivor, authoritative_raw)
+        if merged_card_authorization or any(
+            (row.raw_data or {}).get("_card_authorization_merged") for row in logical_rows
+        ):
+            merged_raw["_card_authorization_merged"] = True
         if cross_matches and survivor.booking_date is not None:
             merged_raw["booking_date"] = survivor.booking_date.date().isoformat()
         if repeated_booked:
