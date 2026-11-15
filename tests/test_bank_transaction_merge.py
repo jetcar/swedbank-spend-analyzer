@@ -211,6 +211,18 @@ class BankTransactionMergeTest(unittest.IsolatedAsyncioTestCase):
             split = await db.scalar(select(ExpenseSplit))
             self.assertEqual(split.transaction_id, first_id)
 
+    async def test_merchantless_settlement_merges_through_database_lookup(self):
+        settlement = card_transaction("547025******6630", "2026-11-09")
+
+        self.assertEqual(await self.import_transactions(FIRST), 1)
+        first_id = (await self.rows())[0].id
+        self.assertEqual(await self.import_transactions(settlement), 0)
+
+        rows = await self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].id, first_id)
+        self.assertEqual(rows[0].value_date, datetime(2026, 11, 6, tzinfo=timezone.utc))
+
     async def test_existing_duplicate_is_collapsed_into_earliest_row(self):
         async with database.tenant_session(self.owner) as db:
             first = Transaction(
@@ -534,7 +546,7 @@ class BankTransactionMergeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0].value_date, datetime(2026, 11, 8, tzinfo=timezone.utc))
         self.assertEqual(await self.balance(), balance)
 
-    async def test_exact_merchant_match_wins_over_compact_collision(self):
+    async def test_same_card_and_amount_merge_despite_merchant_collision(self):
         exact = card_transaction(
             "OST 547025******6630 08.11.26 12:02 14.20 EUR (111111) AB C TALLINN",
             "2026-11-08",

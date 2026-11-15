@@ -24,7 +24,7 @@ class CardTransactionMatchingTest(unittest.TestCase):
         self.assertEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
         self.assertTrue(can_merge_card_transactions(authorization, installment))
 
-    def test_primary_key_preserves_merchant_word_boundaries(self):
+    def test_merges_settlement_despite_merchant_word_boundaries(self):
         authorization = transaction(
             "OST 547025******6630 08.11.26 12:02 14.20 EUR (555453) "
             "RAPINA COOP EHITUSKESKRAPINA LINN 000EE",
@@ -37,7 +37,7 @@ class CardTransactionMatchingTest(unittest.TestCase):
         )
 
         self.assertNotEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
-        self.assertFalse(can_merge_card_transactions(authorization, installment))
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
 
     def test_ignores_standalone_country_code_in_merchant_text(self):
         authorization = transaction(
@@ -54,7 +54,103 @@ class CardTransactionMatchingTest(unittest.TestCase):
         self.assertEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
         self.assertTrue(can_merge_card_transactions(authorization, installment))
 
-    def test_keeps_country_code_when_it_is_part_of_merchant_name(self):
+    def test_matches_repeated_country_suffix_from_latest_hesburger_records(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) HESBURGER TURKU FI FI",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 HESBURGER 20100 TURKU",
+            amount="31.20",
+        )
+
+        self.assertNotEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_matches_accented_and_ascii_merchant_spellings_from_latest_records(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 16:58 90.00 EUR (851282) OISMAE Tallinn EE",
+            amount="81.59",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 OISMÄE 13520 Tallinn",
+            amount="81.59",
+        )
+
+        self.assertNotEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_merges_authorization_and_settlement_without_using_merchant_name(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP AB AB",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SHOP",
+            amount="31.20",
+        )
+
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_merges_authorization_and_settlement_with_different_suffixes(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP FI FI",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SHOP",
+            amount="31.20",
+        )
+
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_merges_authorization_and_settlement_with_spelling_difference(self):
+        accented = transaction("OST 547025******6630 13.11.26 17:41 SÄDE TALLINN", amount="31.20")
+        ascii_name = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SADE TALLINN",
+            amount="31.20",
+        )
+
+        self.assertTrue(can_merge_card_transactions(accented, ascii_name))
+
+    def test_does_not_merge_settlement_after_three_week_window(self):
+        authorization = transaction(
+            "OST 547025******6630 01.10.26 17:41 31.20 EUR (917226) SHOP",
+            amount="31.20",
+        )
+        authorization["value_date"] = "2026-10-01"
+        settlement = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 01.10.26 SHOP",
+            amount="31.20",
+        )
+        settlement["value_date"] = "2026-10-23"
+
+        self.assertFalse(can_merge_card_transactions(authorization, settlement))
+
+    def test_does_not_merge_different_cards(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP",
+            amount="31.20",
+        )
+        settlement = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******4492 13.11.26 SHOP",
+            amount="31.20",
+        )
+
+        self.assertFalse(can_merge_card_transactions(authorization, settlement))
+
+    def test_merges_settlement_without_merchant_description(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP",
+            amount="31.20",
+        )
+        authorization["value_date"] = "2026-11-13"
+        settlement = transaction("547025******6630", amount="31.20")
+        settlement["value_date"] = "2026-11-15"
+
+        self.assertTrue(can_merge_card_transactions(authorization, settlement))
+
+    def test_merges_settlement_despite_country_code_difference(self):
         named_with_ee = transaction(
             "OST 547025******6630 09.11.26 15:13 5.18 EUR (717153) EE SHOP TALLINN",
             amount="5.18",
@@ -65,7 +161,7 @@ class CardTransactionMatchingTest(unittest.TestCase):
         )
 
         self.assertNotEqual(card_transaction_match_key(named_with_ee), card_transaction_match_key(different_merchant))
-        self.assertFalse(can_merge_card_transactions(named_with_ee, different_merchant))
+        self.assertTrue(can_merge_card_transactions(named_with_ee, different_merchant))
 
     def test_matches_repeated_identical_pending_record(self):
         first = transaction(
@@ -149,7 +245,7 @@ class CardTransactionMatchingTest(unittest.TestCase):
         self.assertEqual(card_transaction_match_key(pending), card_transaction_match_key(booked))
         self.assertTrue(can_merge_card_transactions(pending, booked))
 
-    def test_does_not_merge_same_variant_only_because_status_changed(self):
+    def test_merges_authorization_when_status_becomes_booked(self):
         pending = transaction(
             "SULARAHA 516737******4480 08.11.26 12:33 50.00 EUR (595992) Santex RAEPINA 65EE",
             amount="50.00",
@@ -161,7 +257,7 @@ class CardTransactionMatchingTest(unittest.TestCase):
         )
 
         self.assertEqual(card_transaction_match_key(pending), card_transaction_match_key(other))
-        self.assertFalse(can_merge_card_transactions(pending, other))
+        self.assertTrue(can_merge_card_transactions(pending, other))
 
     def test_does_not_merge_two_similar_authorizations(self):
         first = transaction(
