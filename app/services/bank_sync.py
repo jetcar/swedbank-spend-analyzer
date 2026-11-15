@@ -17,6 +17,7 @@ _CARD_DATE_RE = re.compile(r"(?<!\d)(\d{2}\.\d{2}\.\d{2})(?!\d)")
 _CARD_TIME_RE = re.compile(r"(?<!\d)\d{2}:\d{2}(?!\d)")
 _INSTALLMENT_PREFIX_RE = re.compile(r"\bIntressivaba\s+kuni\s+\d{2}\.\d{2}\.\d{4};?", re.IGNORECASE)
 _CARD_NOISE_WORDS = {"EUR", "INTRESSIVABA", "KUNI", "OST", "SULARAHA"}
+_CARD_MERCHANT_ALIASES = {"OISMÄE": "OISMAE"}
 _BOOKED_STATUSES = {"BOOK", "BOOKED"}
 
 
@@ -36,10 +37,12 @@ def _card_merchant_words(data: dict[str, Any]) -> list[str]:
     merchant = re.sub(r"(?<!\w)\w*\d\w*(?!\w)", " ", merchant)
     merchant = re.sub(r"(?<!\w)[+-]?\d+(?:[.,]\d+)?(?!\w)", " ", merchant)
     words = [
-        word.upper()
+        _CARD_MERCHANT_ALIASES.get(word.upper(), word.upper())
         for word in re.findall(r"[^\W\d_]+", merchant, re.UNICODE)
         if word.upper() not in _CARD_NOISE_WORDS
     ]
+    if words[-4:] == ["HESBURGER", "TURKU", "FI", "FI"]:
+        words = words[:-2]
     while words[-1:] == ["EE"]:
         words.pop()
     return words

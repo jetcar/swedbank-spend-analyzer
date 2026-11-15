@@ -54,6 +54,65 @@ class CardTransactionMatchingTest(unittest.TestCase):
         self.assertEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
         self.assertTrue(can_merge_card_transactions(authorization, installment))
 
+    def test_matches_repeated_country_suffix_from_latest_hesburger_records(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) HESBURGER TURKU FI FI",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 HESBURGER 20100 TURKU",
+            amount="31.20",
+        )
+
+        self.assertEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_matches_accented_and_ascii_merchant_spellings_from_latest_records(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 16:58 90.00 EUR (851282) OISMAE Tallinn EE",
+            amount="81.59",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 OISMÄE 13520 Tallinn",
+            amount="81.59",
+        )
+
+        self.assertEqual(card_transaction_match_key(authorization), card_transaction_match_key(installment))
+        self.assertTrue(can_merge_card_transactions(authorization, installment))
+
+    def test_does_not_strip_arbitrary_repeated_two_letter_merchant_words(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP AB AB",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SHOP",
+            amount="31.20",
+        )
+
+        self.assertFalse(can_merge_card_transactions(authorization, installment))
+
+    def test_does_not_strip_fi_suffix_from_other_merchants(self):
+        authorization = transaction(
+            "OST 547025******6630 13.11.26 17:41 31.20 EUR (917226) SHOP FI FI",
+            amount="31.20",
+        )
+        installment = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SHOP",
+            amount="31.20",
+        )
+
+        self.assertFalse(can_merge_card_transactions(authorization, installment))
+
+    def test_does_not_remove_diacritics_from_unrelated_merchants(self):
+        accented = transaction("547025******6630 13.11.26 SÄDE TALLINN", amount="31.20")
+        ascii_name = transaction(
+            "Intressivaba kuni 11.12.2026; 547025******6630 13.11.26 SADE TALLINN",
+            amount="31.20",
+        )
+
+        self.assertFalse(can_merge_card_transactions(accented, ascii_name))
+
     def test_keeps_country_code_when_it_is_part_of_merchant_name(self):
         named_with_ee = transaction(
             "OST 547025******6630 09.11.26 15:13 5.18 EUR (717153) EE SHOP TALLINN",
