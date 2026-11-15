@@ -1,6 +1,7 @@
 import { t as tr, formatMoney as money } from './i18n.js';
 import { calculateSplitTotal, escapeHtml, isValidSplit, rebalanceSplitRows } from './expense-domain.js';
 import { $, runAction, setStatus, transactionTitle, transactionDescription, bindDialogDismiss } from './dashboard-ui.js';
+import { bindCategoryPicker, categoryPickerHtml } from './category-picker.js';
 
 export function createSplitEditor({ state, fetchJson, reload }) {
   let splitExpense = null;
@@ -10,11 +11,11 @@ export function createSplitEditor({ state, fetchJson, reload }) {
     const available = state.categories.filter(category => category.enabled || splitRows.some(row => row.category_id === category.id));
     document.querySelector('#split-rows').innerHTML = splitRows.map((row, index) => `
       <div class="split-row">
-        <select aria-label="${tr('Категории')} ${index+1}" data-split-category="${index}">${available.map(category => `<option value="${escapeHtml(category.id)}" ${category.id === row.category_id ? 'selected' : ''}>${escapeHtml(category.icon)} ${escapeHtml(category.id == null ? tr('Без категории') : category.name)}</option>`).join('')}</select>
+        ${categoryPickerHtml(available, row.category_id, { label: `${tr('Категории')} ${index+1}` })}
         <input type="number" aria-label="${tr('Сумма')} ${index+1}" min="0.01" step="0.01" data-split-amount="${index}" value="${escapeHtml(row.amount)}">
         ${splitRows.length > 2 ? `<button class="icon-button" aria-label="${tr('Удалить часть')}" data-split-remove="${index}">✕</button>` : ''}
       </div>`).join('');
-    document.querySelectorAll('[data-split-category]').forEach(input => input.onchange = () => { splitRows[Number(input.dataset.splitCategory)].category_id = Number(input.value); });
+    document.querySelectorAll('#split-rows .category-picker').forEach((picker, index) => bindCategoryPicker(picker, value => { splitRows[index].category_id = Number(value); renderSplitTotal(); }));
     document.querySelectorAll('[data-split-amount]').forEach(input => input.oninput = () => {
       const changedIndex = Number(input.dataset.splitAmount);
       const result = rebalanceSplitRows(splitRows, changedIndex, input.value, splitExpense?.amount);

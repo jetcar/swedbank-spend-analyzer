@@ -243,8 +243,15 @@ try {
     for (const side of ['left','right','top','bottom']) {
       await page.locator('#transactions .transaction-row').click();
       const dialog = page.locator('#transaction-dialog');
-      assert.equal(await page.locator('#assign-form select').inputValue(),'');
-      await page.locator('#assign-form select').selectOption('1');
+      assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'');
+      assert.equal(await page.locator('#assign-form [data-category-choice="1"] b').textContent(),'FO');
+      assert.equal(await page.locator('#assign-form [data-category-choice=""]').getAttribute('aria-label'),'Без категории');
+      await page.locator('#assign-form [data-category-choice=""]').focus();
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'1');
+      await page.locator('#assign-form [data-category-choice=""]').click();
+      await page.locator('#assign-form [data-category-choice="1"]').click();
+      assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'1');
       const box = await dialog.boundingBox();
       await page.mouse.click(box.x + 4,box.y + 4); // Dialog padding is inside.
       assert.equal(await dialog.isVisible(),true);
@@ -266,7 +273,7 @@ try {
       assert.equal(transactions[1].category_id,null);
     }
     await page.locator('#transactions .transaction-row').click();
-    assert.equal(await page.locator('#assign-form select').inputValue(),'');
+    assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'');
     await page.locator('#detail-split').click();
     await page.locator('#split-rows input').first().fill('1');
     const box = await page.locator('#split-modal').boundingBox();
@@ -281,7 +288,24 @@ try {
   }
   assert.equal(writes.length,writesBeforeDismiss,'Dismissal must not save drafts');
   await page.locator('#transactions .transaction-row').click();
-  await page.locator('#assign-form select').selectOption('1');
+  const categoryPicker = page.locator('#assign-form .category-picker');
+  await categoryPicker.evaluate(element => { element.style.width = '80px'; element.style.maxWidth = '80px'; });
+  assert.ok(await categoryPicker.evaluate(element => element.scrollWidth > element.clientWidth));
+  const pickerBox = await categoryPicker.boundingBox();
+  await page.mouse.move(pickerBox.x + pickerBox.width - 5,pickerBox.y + pickerBox.height / 2);
+  await page.mouse.down();
+  assert.equal(await categoryPicker.evaluate(element => element.classList.contains('dragging')),true);
+  await page.mouse.move(pickerBox.x + 5,pickerBox.y + pickerBox.height / 2);
+  assert.equal(await categoryPicker.evaluate(element => element.dataset.dragged),'true');
+  const pickerScroll = await categoryPicker.evaluate(element => ({left:element.scrollLeft,width:element.clientWidth,scrollWidth:element.scrollWidth}));
+  assert.ok(pickerScroll.left > 0,JSON.stringify(pickerScroll));
+  await page.mouse.up();
+  assert.ok(await categoryPicker.evaluate(element => element.scrollLeft > 0));
+  assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'');
+  await page.waitForFunction(element => element.dataset.dragged === 'false',await categoryPicker.elementHandle());
+  await categoryPicker.evaluate(element => { element.style.width = '180px'; element.style.maxWidth = '180px'; element.scrollLeft = 0; });
+  await page.locator('#assign-form [data-category-choice="1"]').click();
+  assert.equal(await page.locator('#assign-form [name="category"]').inputValue(),'1');
   await page.locator('#assign-form button[type=submit]').click();
   await page.locator('#transaction-dialog').waitFor({state:'hidden'});
   assert.equal(transactions[1].category_id,1);
