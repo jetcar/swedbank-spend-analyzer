@@ -535,6 +535,10 @@ async def sync_account_transactions(account_ids: list[int], owner_id: str) -> No
         )
     for account in accounts:
         await fetch_transactions(account, owner_id)
+    async with database.tenant_session(owner_id) as db:
+        from app.services import category_rules
+        if await category_rules.apply_category_rules(db, owner_id):
+            await db.commit()
     await sync_state.record_auto_sync_result(owner_id, error=None)
 
 
@@ -552,4 +556,8 @@ async def sync_owner_transactions(owner_id: str) -> dict[str, int]:
     imported = 0
     for account in accounts:
         imported += await fetch_transactions(account, owner_id)
+    async with database.tenant_session(owner_id) as db:
+        from app.services import category_rules
+        if await category_rules.apply_category_rules(db, owner_id):
+            await db.commit()
     return {"accounts": len(accounts), "transactions_imported": imported}

@@ -80,6 +80,7 @@ async def _upgrade_tenant_schema(connection, schema: str, owner_id: str) -> None
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS value_date TIMESTAMPTZ",
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS category_id INTEGER",
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS excluded_from_statistics BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE %(schema)s.category_rules ADD COLUMN IF NOT EXISTS category_icon VARCHAR(20)",
         "ALTER TABLE %(schema)s.categories DROP CONSTRAINT IF EXISTS categories_name_key",
         "ALTER TABLE %(schema)s.categories DROP CONSTRAINT IF EXISTS uq_category_name_month",
         "DROP INDEX IF EXISTS %(schema)s.uq_category_name_month",
@@ -150,7 +151,7 @@ async def _upgrade_tenant_schema(connection, schema: str, owner_id: str) -> None
             RETURN NULL;
         END; $$ LANGUAGE plpgsql SET search_path = pg_catalog
     """, schema))
-    for table_name in ("accounts", "transactions", "categories", "expense_splits", "plan_items", "plan_item_transactions"):
+    for table_name in ("accounts", "transactions", "categories", "category_rules", "expense_splits", "plan_items", "plan_item_transactions"):
         await connection.execute(_tenant_ddl("DROP TRIGGER IF EXISTS data_changed ON %(schema)s.%(table)s", schema, table=table_name))
         await connection.execute(_tenant_ddl("""
             CREATE TRIGGER data_changed AFTER INSERT OR UPDATE OR DELETE ON %(schema)s.%(table)s

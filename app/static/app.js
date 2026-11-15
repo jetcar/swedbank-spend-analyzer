@@ -25,7 +25,7 @@ const load = createDashboardLoader({ state, fetchJson, getLanguage, onLoaded() {
 const categories = createCategoriesView({ state, fetchJson, reload: load });
 const split = createSplitEditor({ state, fetchJson, reload: load });
 const transactions = createTransactionsView({ state, fetchJson, reload: load, openSplit: split.open });
-const overview = createOverviewView({ state, renderRow: transactions.renderRow, bindRows: transactions.bindRows });
+const overview = createOverviewView({ state, renderRow: transactions.renderRow, bindRows: transactions.bindRows, openCategory: transactions.openCategory });
 const accounts = createAccountsView({ state, fetchJson, reload: load, onBalanceChange: overview.render });
 const plan = createPlanView({ state, fetchJson, reload: load });
 

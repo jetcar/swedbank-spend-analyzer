@@ -1,9 +1,9 @@
 import { buildCategoryQuery } from './expense-domain.js';
-import { loadMonthTransactions } from './finance-domain.js';
+import { loadMonthTransactions, loadRecentTransactions } from './finance-domain.js';
 
 export function createDashboardState(today = new Date()) {
   return {
-    accounts: [], categories: [], transactions: [], plan: null, syncStatus: { last_success_at: null },
+    accounts: [], categories: [], transactions: [], chartTransactions: [], plan: null, syncStatus: { last_success_at: null },
     selectedMonth: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
   };
 }
@@ -23,6 +23,7 @@ export function createDashboardLoader({ state, fetchJson, getLanguage, onLoaded 
         fetchJson('/api/accounts'),
         categories,
         loadMonthTransactions(fetchJson, month),
+        loadRecentTransactions(fetchJson, 30),
         fetchJson('/api/sync'),
         categories.then(() => fetchJson(buildCategoryQuery('/api/plan', month, language))),
       ]);
@@ -31,7 +32,7 @@ export function createDashboardLoader({ state, fetchJson, getLanguage, onLoaded 
       throw error;
     }
     if (requestedVersion !== version) return false;
-    [state.accounts, state.categories, state.transactions, state.syncStatus, state.plan] = result;
+    [state.accounts, state.categories, state.transactions, state.chartTransactions, state.syncStatus, state.plan] = result;
     onLoaded();
     return true;
   };

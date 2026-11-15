@@ -1,10 +1,11 @@
 from typing import Any
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 
 from app import database, dates, schemas
+from app.services import category_rules
 from app.transaction_details import transaction_counterparty_name
 from app.models import Account, BankSession, Category, ExpenseSplit, Transaction
 
@@ -19,13 +20,16 @@ def planning_month(transaction: Transaction) -> str | None:
     return value.astimezone(timezone.utc).strftime("%Y-%m")
 
 
-async def list_transactions(*, limit: int, month: str | None, owner_id: str, before_id: int | None, page_by_id: bool) -> list[dict[str, Any]]:
+async def list_transactions(*, limit: int, month: str | None, days: int | None, owner_id: str, before_id: int | None, page_by_id: bool) -> list[dict[str, Any]]:
     async with database.tenant_session(owner_id) as db:
         filters = [Account.monitored.is_(True)]
         effective_date = func.coalesce(Transaction.booking_date, Transaction.value_date)
         if month:
             start, end = dates.month_bounds(month)
             filters.extend([effective_date >= start, effective_date < end])
+        if days:
+            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            filters.append(effective_date >= today - timedelta(days=days - 1))
         if before_id is not None:
             filters.append(Transaction.id < before_id)
         transactions = list(
@@ -152,6 +156,7 @@ async def assign_expense(*, expense_id: int, assignment: schemas.CategoryAssignm
             select(Category.id).where(Category.owner_id == owner_id, Category.id == assignment.category_id)
         ) is None:
             raise HTTPException(404, "Category not found")
+        category = None
         if assignment.category_id is not None:
             category = await db.scalar(
                 select(Category).where(Category.owner_id == owner_id, Category.id == assignment.category_id)
@@ -160,8 +165,13 @@ async def assign_expense(*, expense_id: int, assignment: schemas.CategoryAssignm
                 raise HTTPException(400, "Category belongs to another month")
         expense.category_id = assignment.category_id
         await db.execute(delete(ExpenseSplit).where(ExpenseSplit.transaction_id == expense_id))
+        if category is None:
+            await category_rules.forget_category_rule(db, owner_id, expense)
+            auto_assigned = 0
+        else:
+            auto_assigned = await category_rules.remember_category_rule(db, owner_id, expense, category)
         await db.commit()
-    return {"id": expense_id, "category_id": assignment.category_id}
+    return {"id": expense_id, "category_id": assignment.category_id, "auto_assigned": auto_assigned}
 
 
 async def split_expense(*, expense_id: int, assignment: schemas.ExpenseSplitAssignment, owner_id: str) -> dict[str, Any]:
