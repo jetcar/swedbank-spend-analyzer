@@ -59,6 +59,12 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .modal { position: fixed; inset: 0; z-index: 50; background: #0e19196b; display: grid; place-items: center; padding: 20px; }
 .modal-card { width: min(540px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid var(--line); border-radius: 16px; padding: 28px; color: var(--ink); background: var(--surface); box-shadow: var(--shadow); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.category-picker { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; padding: 4px 3px 8px; cursor: grab; scrollbar-width: thin; overscroll-behavior-inline: contain; touch-action: auto; user-select: none; }
+.category-picker.dragging { cursor: grabbing; }
+.category-choice { flex: 0 0 auto; min-width: 58px; min-height: 48px; padding: 7px 10px; border-color: var(--line); color: var(--ink); background: var(--surface); }
+.category-choice span { font-size: 18px; }
+.category-choice b { font-size: 11px; letter-spacing: .4px; }
+.category-choice.selected { border-color: var(--accent); color: var(--accent); background: var(--tint); }
 .split-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 8px; align-items: center; margin: 10px 0; }
 .split-row input, .split-row select { width: 100%; }
 @media (prefers-reduced-motion: reduce) { *, *:before, *:after { transition: none !important; scroll-behavior: auto !important; } }
