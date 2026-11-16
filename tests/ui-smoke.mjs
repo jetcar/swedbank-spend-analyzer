@@ -139,6 +139,10 @@ try {
   await page.locator('[data-view="overview"]').click();
   await page.locator('#chart-range').selectOption('1');
   assert.equal(await page.locator('#cashflow .chart-income').count(),1);
+  await page.reload();
+  await page.locator('.transaction-row').first().waitFor();
+  assert.equal(await page.locator('#chart-range').inputValue(),'1');
+  assert.equal(await page.locator('#cashflow .chart-income').count(),1);
   await page.locator('#chart-range').selectOption('30');
   const layoutWidths = [1440,1100,900,768,761,760,375];
   const assertHeaderControlsFit = async width => {
