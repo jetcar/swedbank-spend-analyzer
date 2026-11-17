@@ -27,6 +27,8 @@ Calculated targets are rounded to cents. Negative amounts remain income targets.
 
 `Category.budget` stores the entered amount. `Category.budget_period` stores `month`, `week`, or `day`, defaulting to `month`. Category and plan responses expose both the entered `budget` and calculated `monthly_budget`.
 
+For `day` and `week`, responses also expose an `available_budget` accrued through the current Europe/Tallinn calendar day. In the current month it equals the source amount multiplied by elapsed calendar days (and divided by 7 for weekly budgets). Past months accrue the full monthly target; future months accrue zero. Monthly budgets always use their full target. Spending and remaining status compare against `available_budget`, while `monthly_budget` remains the full-month projection.
+
 ## Testing strategy
 
 - Unit-test monthly conversion for 28-, 29-, 30-, and 31-day months, including weekly cent rounding and negative income targets.
@@ -43,5 +45,7 @@ Calculated targets are rounded to cents. Negative amounts remain income targets.
 
 - The category editor offers month, week, and day.
 - The monthly target shown throughout the dashboard and plan uses the selected month's calendar-day count.
+- Daily and weekly categories show remaining or overspending against the amount accrued through today.
+- Past months use the full target and future months accrue zero; monthly categories retain existing behavior.
 - The entered recurring amount and period survive reloads and month copying.
 - Existing categories behave exactly as monthly budgets.

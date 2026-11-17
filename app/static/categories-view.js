@@ -29,7 +29,9 @@ export function createCategoriesView({ state, fetchJson, reload }) {
         <input class="category-icon-input" value="${escapeHtml(category.icon)}" maxlength="4" readonly title="${tr('Выбрать иконку')}" data-category-icon="${escapeHtml(category.id)}">
         <div class="expense-main"><input class="category-name-input" value="${escapeHtml(category.name)}" maxlength="100" required aria-label="${tr('Название категории')}: ${escapeHtml(category.name)}" title="${tr('Enter — сохранить, Escape — отменить')}" data-category-name="${escapeHtml(category.id)}"><div class="expense-meta">${category.enabled ? tr('Включена') : tr('Выключена')}</div></div>
         <div class="category-metrics">
-          <div class="category-metric"><span>${category.monthly_budget < 0 ? tr('Доходы за месяц') : tr('Расходы за месяц')}</span>${renderBudgetStatus(category)}</div>
+          <div class="category-metric"><span>${category.budget_period === 'month'
+            ? category.monthly_budget < 0 ? tr('Доходы за месяц') : tr('Расходы за месяц')
+            : category.monthly_budget < 0 ? tr('Доходы к текущей дате') : tr('Расходы к текущей дате')}</span>${renderBudgetStatus(category)}</div>
           <div class="category-metric"><span>${category.budget < 0 ? tr('Ожидаемый доход') : tr('Бюджет')}</span><input type="number" step="0.01" value="${escapeHtml(category.budget || '')}" placeholder="∞" title="${tr('Отрицательный бюджет — ожидаемый доход')}" data-category-budget="${escapeHtml(category.id)}"><select data-category-budget-period="${escapeHtml(category.id)}" aria-label="${tr('Период бюджета')}: ${escapeHtml(category.name)}">${periodOptions(category.budget_period || 'month')}</select><small class="muted">${tr('За месяц')}: ${escapeHtml(category.monthly_budget)}</small></div>
         </div>
         <label class="switch"><input type="checkbox" ${category.enabled ? 'checked' : ''} data-category-enabled="${escapeHtml(category.id)}"> ${tr('Вкл.')}</label>
