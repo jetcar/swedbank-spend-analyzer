@@ -1,3 +1,5 @@
+from calendar import monthrange
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Literal
 
 from fastapi import HTTPException
@@ -15,6 +17,14 @@ CATEGORY_DEFAULTS = {
     "en": (("Food", "🍽️"), ("Transport", "🚗"), ("Home", "🏠"), ("Subscriptions", "📱"), ("Other", "🧾")),
     "et": (("Toit", "🍽️"), ("Transport", "🚗"), ("Kodu", "🏠"), ("Tellimused", "📱"), ("Muu", "🧾")),
 }
+CENT = Decimal("0.01")
+
+
+def effective_monthly_budget(amount: Decimal, period: str, month: str) -> Decimal:
+    year, month_number = (int(value) for value in month.split("-"))
+    days = Decimal(monthrange(year, month_number)[1])
+    multiplier = {"month": Decimal(1), "week": days / Decimal(7), "day": days}[period]
+    return (Decimal(amount) * multiplier).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 def category_defaults(language: str) -> tuple[tuple[str, str], ...]:

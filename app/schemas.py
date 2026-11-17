@@ -9,11 +9,13 @@ class NewCategory(BaseModel):
     icon: str = Field(default="🏷️", min_length=1, max_length=20)
     month: str = Field(pattern=r"^\d{4}-\d{2}$")
     budget: Decimal = Field(default=Decimal(0), max_digits=18, decimal_places=2, allow_inf_nan=False)
+    budget_period: Literal["month", "week", "day"] = "month"
 
 
 class CategorySettings(BaseModel):
     name: str | None = None
     budget: Decimal | None = Field(default=None, max_digits=18, decimal_places=2, allow_inf_nan=False)
+    budget_period: Literal["month", "week", "day"] | None = None
     enabled: bool | None = None
     icon: str | None = Field(default=None, min_length=1, max_length=20)
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")

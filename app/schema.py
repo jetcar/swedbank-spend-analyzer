@@ -70,6 +70,7 @@ async def _upgrade_tenant_schema(connection, schema: str, owner_id: str) -> None
     for statement in (
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS month VARCHAR(7)",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS budget NUMERIC(18, 2) NOT NULL DEFAULT 0",
+        "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS budget_period VARCHAR(10) NOT NULL DEFAULT 'month'",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS name_customized BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'EUR'",
