@@ -93,6 +93,7 @@ class Category(Base):
     icon: Mapped[str] = mapped_column(String(20), default="🏷️")
     month: Mapped[str] = mapped_column(String(7), default=lambda: datetime.utcnow().strftime("%Y-%m"))
     budget: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
+    budget_period: Mapped[str] = mapped_column(String(10), default="month", server_default="month", nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="EUR", server_default="EUR", nullable=False)
     forecast_mode: Mapped[str] = mapped_column(String(10), default="budget", server_default="budget", nullable=False)
     payment_status: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto", nullable=False)

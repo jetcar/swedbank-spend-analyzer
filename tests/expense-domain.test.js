@@ -17,6 +17,7 @@ import {
   rebalanceSplitRows,
   transactionDateLabel,
 } from '../app/static/expense-domain.js';
+import { renderBudgetStatus } from '../app/static/budget-status.js';
 
 describe('frontend helpers', () => {
   test('refreshes category status, expense lists, and daily groups as one operation', async () => {
@@ -56,7 +57,9 @@ describe('frontend helpers', () => {
     [125.50, 100, 'over', -25.5, 125.5],
     [42, 0, 'unlimited', null, null],
   ])('budget %s / %s has status %s', (spent, budget, status, remaining, percent) => {
-    expect(categoryBudgetState({ spent, budget })).toEqual({ spent, budget, status, remaining, percent });
+    const money = value => value == null ? value : Number(value).toFixed(2);
+    expect(categoryBudgetState({ spent, budget })).toEqual({ spent: money(spent), budget: money(budget),
+      status, remaining: money(remaining), percent });
   });
 
   test('provides 30 unique category icons', () => {
@@ -71,12 +74,24 @@ describe('frontend helpers', () => {
     [125.5, -25.5, 125.5, 'income-reached'],
   ])('tracks income %s against a negative budget', (earned, remaining, percent, status) => {
     expect(categoryBudgetState({ budget: -100, spent: 50, earned }))
-      .toEqual({ budget: -100, spent: 50, remaining, percent, status });
+      .toEqual({ budget: '-100.00', spent: '50.00', remaining: Number(remaining).toFixed(2), percent, status });
   });
 
   test('a negative budget without income starts at zero progress', () => {
     expect(categoryBudgetState({ budget: -100, spent: 50 }))
-      .toMatchObject({ remaining: 100, percent: 0, status: 'income-pending' });
+      .toMatchObject({ remaining: '100.00', percent: 0, status: 'income-pending' });
+  });
+
+  test('uses the calculated monthly budget for recurring periods', () => {
+    expect(categoryBudgetState({ budget: 10, monthly_budget: 300, spent: 75 }))
+      .toMatchObject({ budget: '300.00', remaining: '225.00', percent: 25, status: 'within' });
+  });
+
+  test('compares large calculated budgets without losing cents', () => {
+    expect(categoryBudgetState({ monthly_budget: '309999999999999.69', spent: '309999999999999.69' }))
+      .toMatchObject({ remaining: '0.00', percent: 100, status: 'reached' });
+    expect(renderBudgetStatus({ id: 1, monthly_budget: '309999999999999.69', spent: '309999999999999.69' }))
+      .toContain('999,69');
   });
 
   test('builds a month query without losing existing parameters', () => {

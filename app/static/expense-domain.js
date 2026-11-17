@@ -23,18 +23,30 @@ export function escapeHtml(value) {
 }
 
 export function categoryBudgetState(category) {
-  const spent = Math.round(Number(category.spent || 0) * 100);
-  const budget = Math.round(Number(category.budget || 0) * 100);
-  const actual = budget < 0 ? Math.round(Number(category.earned || 0) * 100) : spent;
-  const target = Math.abs(budget);
-  const percent = target > 0 ? Math.round(actual / target * 1000) / 10 : null;
+  const cents = value => {
+    const normalized = String(value ?? 0).trim();
+    const match = normalized.match(/^(-?)(\d+)(?:\.(\d+))?$/);
+    if (!match) return 0n;
+    const fraction = `${match[3] || ''}00`.slice(0, 2);
+    return BigInt(`${match[1]}${match[2]}${fraction}`);
+  };
+  const spent = cents(category.spent);
+  const budget = cents(category.monthly_budget ?? category.budget);
+  const actual = budget < 0n ? cents(category.earned) : spent;
+  const target = budget < 0n ? -budget : budget;
+  const percent = target > 0n ? Number((actual * 1000n + target / 2n) / target) / 10 : null;
+  const amount = value => {
+    const sign = value < 0n ? '-' : '';
+    const absolute = value < 0n ? -value : value;
+    return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
+  };
   return {
-    spent: spent / 100,
-    budget: budget / 100,
-    remaining: target > 0 ? (target - actual) / 100 : null,
+    spent: amount(spent),
+    budget: amount(budget),
+    remaining: target > 0n ? amount(target - actual) : null,
     percent,
-    status: budget < 0 ? (actual >= target ? 'income-reached' : 'income-pending')
-      : budget === 0 ? 'unlimited' : spent > budget ? 'over' : spent === budget ? 'reached' : spent >= budget * 0.8 ? 'near' : 'within',
+    status: budget < 0n ? (actual >= target ? 'income-reached' : 'income-pending')
+      : budget === 0n ? 'unlimited' : spent > budget ? 'over' : spent === budget ? 'reached' : spent * 10n >= budget * 8n ? 'near' : 'within',
   };
 }
 

@@ -200,20 +200,21 @@ async def get_categories(month: str | None = None) -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-async def create_category(name: str, month: str, icon: str = "🏷️", budget: float = 0) -> dict[str, Any]:
-    """Create a category for a YYYY-MM month. Zero budget means no limit; negative budget means expected income."""
-    return await api("POST", "/api/categories", json={"name": name, "month": month, "icon": icon, "budget": budget})
+async def create_category(name: str, month: str, icon: str = "🏷️", budget: float = 0, budget_period: str = "month") -> dict[str, Any]:
+    """Create a category with a monthly, weekly, or daily recurring budget. Zero means no limit; negative means expected income."""
+    return await api("POST", "/api/categories", json={"name": name, "month": month, "icon": icon, "budget": budget, "budget_period": budget_period})
 
 
 @mcp.tool()
 async def update_category(
     category_id: int,
     budget: float | None = None,
+    budget_period: str | None = None,
     enabled: bool | None = None,
     icon: str | None = None,
 ) -> dict[str, Any]:
     """Update any supplied category fields. Disabled categories stop receiving assignments."""
-    payload = {key: value for key, value in {"budget": budget, "enabled": enabled, "icon": icon}.items() if value is not None}
+    payload = {key: value for key, value in {"budget": budget, "budget_period": budget_period, "enabled": enabled, "icon": icon}.items() if value is not None}
     return await api("PATCH", f"/api/categories/{category_id}", json=payload)
 
 

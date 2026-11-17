@@ -34,9 +34,12 @@ export function createPlanView({ state, fetchJson, reload }) {
 
   function categoryRow(category) {
     const id = esc(category.id);
+    const periods = options([['month', 'За месяц'], ['week', 'За неделю'], ['day', 'За день']], category.budget_period || 'month');
     return `<article class="plan-row ${category.enabled ? '' : 'plan-disabled'}" data-plan-category="${id}">
-      <div class="plan-row-heading"><strong>${esc(category.icon)} ${esc(category.name)}</strong><span class="badge">${esc(tr(cents(category.budget) < 0n ? 'Доходы' : 'Расходы'))}${category.enabled ? '' : ` · ${esc(tr('Выключена'))}`}</span></div>
-      <div class="plan-category-fields">${field('План месяца', `<input type="number" step="0.01" value="${esc(category.budget)}" data-plan-setting="budget" aria-label="${esc(tr('План месяца'))}: ${esc(category.name)}">`)}
+      <div class="plan-row-heading"><strong>${esc(category.icon)} ${esc(category.name)}</strong><span class="badge">${esc(tr(cents(category.monthly_budget) < 0n ? 'Доходы' : 'Расходы'))}${category.enabled ? '' : ` · ${esc(tr('Выключена'))}`}</span></div>
+      <div class="plan-category-fields">${field('Бюджет', `<input type="number" step="0.01" value="${esc(category.budget)}" data-plan-setting="budget" aria-label="${esc(tr('Бюджет'))}: ${esc(category.name)}">`)}
+      ${field('Период бюджета', `<select data-plan-setting="budget_period" aria-label="${esc(tr('Период бюджета'))}: ${esc(category.name)}">${periods}</select>`)}
+      ${field('План месяца', `<output>${money(category.monthly_budget, category.currency)}</output>`)}
       ${field('Валюта', `<input value="${esc(category.currency)}" maxlength="3" minlength="3" pattern="[A-Za-z]{3}" required data-plan-setting="currency" aria-label="${esc(tr('Валюта'))}: ${esc(category.name)}">`)}
       ${field('Тип расчёта', `<select data-plan-setting="forecast_mode" aria-label="${esc(tr('Тип расчёта'))}: ${esc(category.name)}">${options(modeOptions, category.forecast_mode)}</select>`)}
       ${field('Статус платежа', statusSelect(category.payment_status, `data-plan-setting="payment_status" ${category.forecast_mode === 'budget' ? 'disabled' : ''} aria-label="${esc(tr('Статус платежа'))}: ${esc(category.name)}"`))}</div>

@@ -67,7 +67,9 @@ class CategoryBudgetTest(unittest.IsolatedAsyncioTestCase):
 
                 renamed = await client.patch(f"/api/categories/{category_id}", json={"name": "  Groceries  "})
                 self.assertEqual(renamed.status_code, 200, renamed.text)
-                self.assertEqual(renamed.json(), {"id": category_id, "name": "Groceries", "budget": 125, "enabled": True, "icon": "🍽️"})
+                self.assertEqual(renamed.json(), {"id": category_id, "name": "Groceries", "budget": "125.00",
+                                                  "budget_period": "month", "monthly_budget": "125.00",
+                                                  "enabled": True, "icon": "🍽️"})
                 rows = (await client.get("/api/categories", params={"month": "2098-06"})).json()
                 self.assertEqual([(row["id"], row["name"]) for row in rows], [(category_id, "Groceries")])
 
@@ -203,22 +205,22 @@ class CategoryBudgetTest(unittest.IsolatedAsyncioTestCase):
                 response = await client.get("/api/categories", params={"month": "2098-06"})
                 self.assertEqual(response.status_code, 200)
                 result = {row["id"]: row for row in response.json()}
-                self.assertEqual(result[categories[0].id]["spent"], 83.01)
-                self.assertEqual(result[categories[1].id]["spent"], 7)
-                self.assertEqual(result[categories[0].id]["earned"], 130)
-                self.assertEqual(result[categories[1].id]["earned"], 70)
+                self.assertEqual(result[categories[0].id]["spent"], "83.01")
+                self.assertEqual(result[categories[1].id]["spent"], "7.00")
+                self.assertEqual(result[categories[0].id]["earned"], "130.00")
+                self.assertEqual(result[categories[1].id]["earned"], "70.00")
 
                 created = await client.post("/api/categories", json={"name": "Salary", "month": "2098-06", "budget": -1500.25})
                 self.assertEqual(created.status_code, 200, created.text)
-                self.assertEqual(created.json()["budget"], -1500.25)
+                self.assertEqual(created.json()["budget"], "-1500.25")
                 updated = await client.patch(f'/api/categories/{created.json()["id"]}', json={"budget": -2000.50})
                 self.assertEqual(updated.status_code, 200, updated.text)
-                self.assertEqual(updated.json()["budget"], -2000.50)
+                self.assertEqual(updated.json()["budget"], "-2000.50")
                 current = (await client.get("/api/categories", params={"month": "2098-06"})).json()
                 salary = next(row for row in current if row["name"] == "Salary")
-                self.assertEqual((salary["budget"], salary["earned"]), (-2000.50, 0))
+                self.assertEqual((salary["budget"], salary["earned"]), ("-2000.50", "0.00"))
                 copied = (await client.get("/api/categories", params={"month": "2098-07"})).json()
-                self.assertEqual(next(row for row in copied if row["name"] == "Salary")["budget"], -2000.50)
+                self.assertEqual(next(row for row in copied if row["name"] == "Salary")["budget"], "-2000.50")
         finally:
             main.app.dependency_overrides.pop(dependencies.current_owner_id, None)
             schema = database.tenant_schema_name(owner)

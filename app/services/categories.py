@@ -1,3 +1,5 @@
+from calendar import monthrange
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Literal
 
 from fastapi import HTTPException
@@ -15,6 +17,18 @@ CATEGORY_DEFAULTS = {
     "en": (("Food", "🍽️"), ("Transport", "🚗"), ("Home", "🏠"), ("Subscriptions", "📱"), ("Other", "🧾")),
     "et": (("Toit", "🍽️"), ("Transport", "🚗"), ("Kodu", "🏠"), ("Tellimused", "📱"), ("Muu", "🧾")),
 }
+CENT = Decimal("0.01")
+
+
+def money_string(amount: Decimal) -> str:
+    return str(Decimal(amount).quantize(CENT, rounding=ROUND_HALF_UP))
+
+
+def effective_monthly_budget(amount: Decimal, period: str, month: str) -> Decimal:
+    year, month_number = (int(value) for value in month.split("-"))
+    days = Decimal(monthrange(year, month_number)[1])
+    multiplier = {"month": Decimal(1), "week": days / Decimal(7), "day": days}[period]
+    return (Decimal(amount) * multiplier).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 def category_defaults(language: str) -> tuple[tuple[str, str], ...]:
@@ -26,6 +40,7 @@ def localize_untouched_defaults(categories: list[Category], language: str) -> bo
     is_default_set = any(current == set(defaults) for defaults in CATEGORY_DEFAULTS.values())
     if not is_default_set or any(
         category.name_customized or category.budget or category.enabled is False
+        or category.budget_period not in (None, "month")
         or category.currency not in (None, "EUR")
         or category.forecast_mode not in (None, "budget")
         or category.payment_status not in (None, "auto")
@@ -64,7 +79,7 @@ async def ensure_month_categories(db: AsyncSession, owner_id: str, month: str, l
     )
     if previous:
         categories = [
-            Category(owner_id=owner_id, name=category.name, icon=category.icon, month=month, budget=category.budget, enabled=category.enabled, name_customized=category.name_customized,
+            Category(owner_id=owner_id, name=category.name, icon=category.icon, month=month, budget=category.budget, budget_period=category.budget_period, enabled=category.enabled, name_customized=category.name_customized,
                      currency=category.currency, forecast_mode=category.forecast_mode, payment_status="auto")
             for category in previous
         ]
@@ -123,7 +138,10 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
         spent = {category_id: amount for category_id, amount, _ in totals}
         earned = {category_id: amount for category_id, _, amount in totals}
     return [
-        {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": float(category.budget or 0), "enabled": category.enabled, "spent": float(spent.get(category.id) or 0), "earned": float(earned.get(category.id) or 0),
+        {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": money_string(category.budget or Decimal(0)),
+         "budget_period": category.budget_period, "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+         "enabled": category.enabled, "spent": money_string(spent.get(category.id) or Decimal(0)),
+         "earned": money_string(earned.get(category.id) or Decimal(0)),
          "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status}
         for category in categories
     ]
@@ -142,11 +160,14 @@ async def create_category(*, category_input: schemas.NewCategory, owner_id: str)
         )
         if exists:
             raise HTTPException(409, "Category already exists for this month")
-        category = Category(owner_id=owner_id, name=category_input.name.strip(), icon=category_input.icon, month=selected_month, budget=category_input.budget, name_customized=True)
+        category = Category(owner_id=owner_id, name=category_input.name.strip(), icon=category_input.icon, month=selected_month,
+                            budget=category_input.budget, budget_period=category_input.budget_period, name_customized=True)
         db.add(category)
         await db.commit()
         await db.refresh(category)
-    return {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": float(category.budget or 0), "enabled": category.enabled}
+    return {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month,
+            "budget": money_string(category.budget or Decimal(0)), "budget_period": category.budget_period,
+            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)), "enabled": category.enabled}
 
 
 async def update_category(*, category_id: int, settings: schemas.CategorySettings, owner_id: str) -> dict[str, Any]:
@@ -175,6 +196,8 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             category.name_customized = True
         if settings.budget is not None:
             category.budget = settings.budget
+        if settings.budget_period is not None:
+            category.budget_period = settings.budget_period
         if settings.enabled is not None:
             category.enabled = settings.enabled
         if settings.icon is not None:
@@ -190,7 +213,10 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             if settings.name is not None and "uq_category_owner_name_month" in str(exc.orig):
                 raise HTTPException(409, "Category already exists for this month") from exc
             raise
-    return {"id": category_id, "name": category.name, "budget": float(category.budget or 0), "enabled": category.enabled, "icon": category.icon}
+    return {"id": category_id, "name": category.name, "budget": money_string(category.budget or Decimal(0)),
+            "budget_period": category.budget_period,
+            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+            "enabled": category.enabled, "icon": category.icon}
 
 
 async def delete_category(*, category_id: int, owner_id: str) -> dict[str, Any]:

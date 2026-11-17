@@ -1,5 +1,6 @@
 """Demo requests must never reach persistent storage or another visitor."""
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from unittest.mock import patch
 import asyncio
 import base64
@@ -132,7 +133,7 @@ class DemoTest(unittest.IsolatedAsyncioTestCase):
             response = await self.client.patch(f'/api/expenses/{transactions[1]["id"]}/category', json={"category_id": first_id})
             self.assertEqual(response.status_code, 200, response.text)
             categories = (await self.client.get("/api/categories?month=2026-11")).json()
-            self.assertEqual(sum(row["spent"] for row in categories), 20)
+            self.assertEqual(sum(Decimal(row["spent"]) for row in categories), Decimal("20.00"))
             for path in ("/api/expenses", "/api/daily-summary", "/api/daily-breakdown", "/api/summary"):
                 response = await self.client.get(path)
                 self.assertEqual(response.status_code, 200, response.text)
