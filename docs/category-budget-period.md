@@ -31,6 +31,8 @@ For `day` and `week`, responses also expose an `available_budget` accrued throug
 
 The category card shows a dynamic projected month total for daily and weekly expense budgets: `monthly_budget + max(spent - available_budget, 0)`. Future daily/weekly allowances therefore remain on top of any current overspending. The projection falls when later savings absorb that overspending and stays level when new spending matches the newly accrued allowance.
 
+The overall plan forecast uses the same dynamic target. Because transactions have already reduced the account balance, the remaining forecast is `projected month total - actual`, equivalent to `monthly_budget - min(actual, available_budget)`. This keeps all future daily/weekly allowances in the closing-balance forecast without counting current spending twice.
+
 ## Testing strategy
 
 - Unit-test monthly conversion for 28-, 29-, 30-, and 31-day months, including weekly cent rounding and negative income targets.
