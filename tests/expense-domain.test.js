@@ -98,8 +98,10 @@ describe('frontend helpers', () => {
   });
 
   test('zero accrued recurring income keeps income semantics', () => {
-    expect(categoryBudgetState({ budget_period: 'week', monthly_budget: '-300.00', available_budget: '-0.00', earned: '5.00' }))
+    const category = { id: 1, budget_period: 'week', monthly_budget: '-300.00', available_budget: '-0.00', earned: '5.00' };
+    expect(categoryBudgetState(category))
       .toMatchObject({ remaining: '-5.00', status: 'income-reached' });
+    expect(renderBudgetStatus(category)).toContain('5,00');
   });
 
   test('compares large calculated budgets without losing cents', () => {
