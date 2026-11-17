@@ -1,4 +1,5 @@
 from calendar import monthrange
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Literal
 
@@ -28,6 +29,21 @@ def effective_monthly_budget(amount: Decimal, period: str, month: str) -> Decima
     year, month_number = (int(value) for value in month.split("-"))
     days = Decimal(monthrange(year, month_number)[1])
     multiplier = {"month": Decimal(1), "week": days / Decimal(7), "day": days}[period]
+    return (Decimal(amount) * multiplier).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def effective_available_budget(amount: Decimal, period: str, month: str, *, today: date | None = None) -> Decimal:
+    monthly = effective_monthly_budget(amount, period, month)
+    if period == "month":
+        return monthly
+    current = today or dates.current_date()
+    current_month = current.strftime("%Y-%m")
+    if month < current_month:
+        return monthly
+    if month > current_month:
+        return Decimal(0).quantize(CENT)
+    elapsed_days = Decimal(current.day)
+    multiplier = elapsed_days if period == "day" else elapsed_days / Decimal(7)
     return (Decimal(amount) * multiplier).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
@@ -139,7 +155,9 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
         earned = {category_id: amount for category_id, _, amount in totals}
     return [
         {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": money_string(category.budget or Decimal(0)),
-         "budget_period": category.budget_period, "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+         "budget_period": category.budget_period,
+         "monthly_budget": money_string(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+         "available_budget": money_string(effective_available_budget(category.budget or 0, category.budget_period, category.month)),
          "enabled": category.enabled, "spent": money_string(spent.get(category.id) or Decimal(0)),
          "earned": money_string(earned.get(category.id) or Decimal(0)),
          "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status}
@@ -167,7 +185,9 @@ async def create_category(*, category_input: schemas.NewCategory, owner_id: str)
         await db.refresh(category)
     return {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month,
             "budget": money_string(category.budget or Decimal(0)), "budget_period": category.budget_period,
-            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)), "enabled": category.enabled}
+            "monthly_budget": money_string(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+            "available_budget": money_string(effective_available_budget(category.budget or 0, category.budget_period, category.month)),
+            "enabled": category.enabled}
 
 
 async def update_category(*, category_id: int, settings: schemas.CategorySettings, owner_id: str) -> dict[str, Any]:
@@ -215,7 +235,8 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             raise
     return {"id": category_id, "name": category.name, "budget": money_string(category.budget or Decimal(0)),
             "budget_period": category.budget_period,
-            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+            "monthly_budget": money_string(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+            "available_budget": money_string(effective_available_budget(category.budget or 0, category.budget_period, category.month)),
             "enabled": category.enabled, "icon": category.icon}
 
 

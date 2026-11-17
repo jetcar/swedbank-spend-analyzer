@@ -68,7 +68,7 @@ class CategoryBudgetTest(unittest.IsolatedAsyncioTestCase):
                 renamed = await client.patch(f"/api/categories/{category_id}", json={"name": "  Groceries  "})
                 self.assertEqual(renamed.status_code, 200, renamed.text)
                 self.assertEqual(renamed.json(), {"id": category_id, "name": "Groceries", "budget": "125.00",
-                                                  "budget_period": "month", "monthly_budget": "125.00",
+                                                  "budget_period": "month", "monthly_budget": "125.00", "available_budget": "125.00",
                                                   "enabled": True, "icon": "🍽️"})
                 rows = (await client.get("/api/categories", params={"month": "2098-06"})).json()
                 self.assertEqual([(row["id"], row["name"]) for row in rows], [(category_id, "Groceries")])

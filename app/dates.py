@@ -1,10 +1,14 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 import re
 
 from fastapi import HTTPException
 
 from app.models import Transaction
+
+
+LOCAL_TIMEZONE = ZoneInfo("Europe/Tallinn")
 
 
 def parse_datetime(value: str | None) -> datetime | None:
@@ -68,4 +72,8 @@ def month_bounds(month: str) -> tuple[datetime, datetime]:
 
 
 def current_month() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m")
+    return current_date().strftime("%Y-%m")
+
+
+def current_date(now: datetime | None = None) -> date:
+    return (now or datetime.now(timezone.utc)).astimezone(LOCAL_TIMEZONE).date()

@@ -1,5 +1,5 @@
 """Forecast API contract, using private in-memory demo databases."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from contextlib import asynccontextmanager
 from decimal import Decimal
 import asyncio
@@ -25,6 +25,7 @@ class MonthForecastTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.patches = [
             patch.object(dates, "current_month", return_value="2026-11"),
+            patch.object(dates, "current_date", return_value=date(2026, 11, 17)),
             patch.object(database, "ensure_tenant_schema", side_effect=AssertionError("Persistent database accessed")),
         ]
         for patcher in self.patches:
@@ -117,15 +118,18 @@ class MonthForecastTest(unittest.IsolatedAsyncioTestCase):
     async def test_month_copy_preserves_settings_and_resets_payment_status(self):
         await self.category("Loan", "150", forecast_mode="payment", currency="USD", payment_status="closed", budget_period="week")
         row = (await self.plan("2026-12"))["categories"][0]
-        self.assertEqual((row["name"], row["budget"], row["budget_period"], row["monthly_budget"], row["currency"], row["forecast_mode"], row["payment_status"], row["remaining"]),
-                         ("Loan", "150.00", "week", "664.29", "USD", "payment", "auto", "664.29"))
+        self.assertEqual((row["name"], row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["currency"], row["forecast_mode"], row["payment_status"], row["remaining"]),
+                         ("Loan", "150.00", "week", "664.29", "0.00", "USD", "payment", "auto", "0.00"))
         self.assertEqual((await self.plan("2026-12"))["items"], [])
 
     async def test_daily_budget_is_calculated_for_selected_month(self):
         category_id = await self.category("Meals", "10", budget_period="day")
+        category = next(row for row in (await self.client.get("/api/categories", params={"month": "2026-11"})).json()
+                        if row["id"] == category_id)
+        self.assertEqual((category["monthly_budget"], category["available_budget"]), ("300.00", "170.00"))
         row = next(row for row in (await self.plan())["categories"] if row["id"] == category_id)
-        self.assertEqual((row["budget"], row["budget_period"], row["monthly_budget"], row["remaining"]),
-                         ("10.00", "day", "300.00", "300.00"))
+        self.assertEqual((row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["remaining"]),
+                         ("10.00", "day", "300.00", "170.00", "170.00"))
 
     async def test_splits_reserved_once_and_delete_releases_allocations(self):
         first = await self.category("Food", "100")
@@ -271,7 +275,7 @@ class MonthForecastTest(unittest.IsolatedAsyncioTestCase):
     async def test_demo_tenant_separation_and_write_response_compatibility(self):
         category_id = await self.category()
         response = await self.client.patch(f"/api/categories/{category_id}", json={"forecast_mode": "payment", "currency": "USD"})
-        self.assertEqual(set(response.json()), {"id", "name", "budget", "budget_period", "monthly_budget", "enabled", "icon"})
+        self.assertEqual(set(response.json()), {"id", "name", "budget", "budget_period", "monthly_budget", "available_budget", "enabled", "icon"})
         item = await self.item()
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="https://test") as other:
             await other.post("/auth/demo/start")

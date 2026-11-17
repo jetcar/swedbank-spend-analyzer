@@ -1,7 +1,9 @@
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import unittest
 
-from app.services.categories import effective_monthly_budget
+from app import dates
+from app.services.categories import effective_available_budget, effective_monthly_budget
 
 
 class CategoryBudgetPeriodTest(unittest.TestCase):
@@ -26,6 +28,20 @@ class CategoryBudgetPeriodTest(unittest.TestCase):
 
     def test_negative_income_target_keeps_its_sign(self):
         self.assertEqual(effective_monthly_budget(Decimal("-50"), "week", "2026-11"), Decimal("-214.29"))
+
+    def test_daily_and_weekly_amounts_accrue_through_today(self):
+        today = date(2026, 11, 17)
+        self.assertEqual(effective_available_budget(Decimal("10"), "day", "2026-11", today=today), Decimal("170.00"))
+        self.assertEqual(effective_available_budget(Decimal("70"), "week", "2026-11", today=today), Decimal("170.00"))
+
+    def test_accrual_boundaries_preserve_monthly_behavior(self):
+        today = date(2026, 11, 17)
+        self.assertEqual(effective_available_budget(Decimal("10"), "day", "2026-10", today=today), Decimal("310.00"))
+        self.assertEqual(effective_available_budget(Decimal("10"), "day", "2026-12", today=today), Decimal("0.00"))
+        self.assertEqual(effective_available_budget(Decimal("300"), "month", "2026-11", today=today), Decimal("300.00"))
+
+    def test_current_day_uses_tallinn_calendar(self):
+        self.assertEqual(dates.current_date(datetime(2026, 11, 16, 22, 30, tzinfo=timezone.utc)), date(2026, 11, 17))
 
 
 if __name__ == "__main__":

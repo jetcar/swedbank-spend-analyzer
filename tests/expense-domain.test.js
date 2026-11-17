@@ -87,6 +87,16 @@ describe('frontend helpers', () => {
       .toMatchObject({ budget: '300.00', remaining: '225.00', percent: 25, status: 'within' });
   });
 
+  test('uses the accrued budget for recurring-period status', () => {
+    expect(categoryBudgetState({ monthly_budget: '300.00', available_budget: '170.00', spent: '180.00' }))
+      .toMatchObject({ budget: '170.00', remaining: '-10.00', status: 'over' });
+  });
+
+  test('zero accrued recurring budget is limited rather than unlimited', () => {
+    expect(categoryBudgetState({ budget_period: 'day', available_budget: '0.00', spent: '5.00' }))
+      .toMatchObject({ remaining: '-5.00', status: 'over' });
+  });
+
   test('compares large calculated budgets without losing cents', () => {
     expect(categoryBudgetState({ monthly_budget: '309999999999999.69', spent: '309999999999999.69' }))
       .toMatchObject({ remaining: '0.00', percent: 100, status: 'reached' });

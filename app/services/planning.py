@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app import database, dates, schemas
 from app.models import Account, BankSession, Category, ExpenseSplit, PlanItem, PlanItemTransaction, Transaction
 from app.services.accounts import account_balance_expression
-from app.services.categories import effective_monthly_budget, ensure_month_categories
+from app.services.categories import effective_available_budget, effective_monthly_budget, ensure_month_categories
 
 
 ZERO = Decimal("0")
@@ -114,12 +114,13 @@ async def list_plan(*, month: str | None, language: str, owner_id: str) -> dict[
     for category in categories:
         source_amount = Decimal(category.budget or 0)
         amount = effective_monthly_budget(source_amount, category.budget_period, category.month)
+        available = effective_available_budget(source_amount, category.budget_period, category.month)
         direction = "CRDT" if amount < ZERO else "DBIT"
         actual = actuals[(category.id, direction, category.currency)]
-        pending = remaining(amount, actual, category.payment_status, mode=category.forecast_mode) if category.enabled else ZERO
+        pending = remaining(available, actual, category.payment_status, mode=category.forecast_mode) if category.enabled else ZERO
         category_rows.append({
             "id": category.id, "name": category.name, "icon": category.icon, "budget": money(source_amount),
-            "budget_period": category.budget_period, "monthly_budget": money(amount),
+            "budget_period": category.budget_period, "monthly_budget": money(amount), "available_budget": money(available),
             "currency": category.currency, "forecast_mode": category.forecast_mode,
             "payment_status": category.payment_status, "enabled": category.enabled,
             "actual": money(actual), "remaining": money(pending),
