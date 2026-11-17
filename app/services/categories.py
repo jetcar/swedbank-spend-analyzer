@@ -20,6 +20,10 @@ CATEGORY_DEFAULTS = {
 CENT = Decimal("0.01")
 
 
+def money_string(amount: Decimal) -> str:
+    return str(Decimal(amount).quantize(CENT, rounding=ROUND_HALF_UP))
+
+
 def effective_monthly_budget(amount: Decimal, period: str, month: str) -> Decimal:
     year, month_number = (int(value) for value in month.split("-"))
     days = Decimal(monthrange(year, month_number)[1])
@@ -134,9 +138,10 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
         spent = {category_id: amount for category_id, amount, _ in totals}
         earned = {category_id: amount for category_id, _, amount in totals}
     return [
-        {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": float(category.budget or 0),
+        {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": money_string(category.budget or Decimal(0)),
          "budget_period": category.budget_period, "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
-         "enabled": category.enabled, "spent": float(spent.get(category.id) or 0), "earned": float(earned.get(category.id) or 0),
+         "enabled": category.enabled, "spent": money_string(spent.get(category.id) or Decimal(0)),
+         "earned": money_string(earned.get(category.id) or Decimal(0)),
          "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status}
         for category in categories
     ]
@@ -161,7 +166,7 @@ async def create_category(*, category_input: schemas.NewCategory, owner_id: str)
         await db.commit()
         await db.refresh(category)
     return {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month,
-            "budget": float(category.budget or 0), "budget_period": category.budget_period,
+            "budget": money_string(category.budget or Decimal(0)), "budget_period": category.budget_period,
             "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)), "enabled": category.enabled}
 
 
@@ -208,7 +213,7 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             if settings.name is not None and "uq_category_owner_name_month" in str(exc.orig):
                 raise HTTPException(409, "Category already exists for this month") from exc
             raise
-    return {"id": category_id, "name": category.name, "budget": float(category.budget or 0),
+    return {"id": category_id, "name": category.name, "budget": money_string(category.budget or Decimal(0)),
             "budget_period": category.budget_period,
             "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
             "enabled": category.enabled, "icon": category.icon}

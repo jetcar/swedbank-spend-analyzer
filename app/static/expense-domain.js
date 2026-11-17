@@ -35,7 +35,11 @@ export function categoryBudgetState(category) {
   const actual = budget < 0n ? cents(category.earned) : spent;
   const target = budget < 0n ? -budget : budget;
   const percent = target > 0n ? Number((actual * 1000n + target / 2n) / target) / 10 : null;
-  const amount = value => Number(value) / 100;
+  const amount = value => {
+    const sign = value < 0n ? '-' : '';
+    const absolute = value < 0n ? -value : value;
+    return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
+  };
   return {
     spent: amount(spent),
     budget: amount(budget),
