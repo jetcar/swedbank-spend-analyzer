@@ -97,6 +97,11 @@ describe('frontend helpers', () => {
       .toMatchObject({ remaining: '-5.00', status: 'over' });
   });
 
+  test('zero accrued recurring income keeps income semantics', () => {
+    expect(categoryBudgetState({ budget_period: 'week', monthly_budget: '-300.00', available_budget: '-0.00', earned: '5.00' }))
+      .toMatchObject({ remaining: '-5.00', status: 'income-reached' });
+  });
+
   test('compares large calculated budgets without losing cents', () => {
     expect(categoryBudgetState({ monthly_budget: '309999999999999.69', spent: '309999999999999.69' }))
       .toMatchObject({ remaining: '0.00', percent: 100, status: 'reached' });

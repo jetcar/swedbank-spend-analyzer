@@ -41,7 +41,7 @@ def effective_available_budget(amount: Decimal, period: str, month: str, *, toda
     if month < current_month:
         return monthly
     if month > current_month:
-        return Decimal(0).quantize(CENT)
+        return Decimal("-0.00") if Decimal(amount) < 0 else Decimal("0.00")
     elapsed_days = Decimal(current.day)
     multiplier = elapsed_days if period == "day" else elapsed_days / Decimal(7)
     return (Decimal(amount) * multiplier).quantize(CENT, rounding=ROUND_HALF_UP)

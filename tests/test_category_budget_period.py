@@ -38,6 +38,7 @@ class CategoryBudgetPeriodTest(unittest.TestCase):
         today = date(2026, 11, 17)
         self.assertEqual(effective_available_budget(Decimal("10"), "day", "2026-10", today=today), Decimal("310.00"))
         self.assertEqual(effective_available_budget(Decimal("10"), "day", "2026-12", today=today), Decimal("0.00"))
+        self.assertEqual(str(effective_available_budget(Decimal("-10"), "day", "2026-12", today=today)), "-0.00")
         self.assertEqual(effective_available_budget(Decimal("300"), "month", "2026-11", today=today), Decimal("300.00"))
 
     def test_current_day_uses_tallinn_calendar(self):

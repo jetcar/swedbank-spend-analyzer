@@ -3,7 +3,7 @@ import { categoryBudgetState, escapeHtml } from './expense-domain.js';
 
 export function renderBudgetStatus(category) {
   const state = categoryBudgetState(category);
-  const income = Number(state.budget) < 0;
+  const income = Number(category.monthly_budget ?? category.budget) < 0;
   const remaining = state.remaining == null ? null : Number(state.remaining);
   const positive = value => String(value).replace(/^-/, '');
   const label = income
