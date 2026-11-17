@@ -24,7 +24,7 @@ export function escapeHtml(value) {
 
 export function categoryBudgetState(category) {
   const spent = Math.round(Number(category.spent || 0) * 100);
-  const budget = Math.round(Number(category.budget || 0) * 100);
+  const budget = Math.round(Number(category.monthly_budget ?? category.budget ?? 0) * 100);
   const actual = budget < 0 ? Math.round(Number(category.earned || 0) * 100) : spent;
   const target = Math.abs(budget);
   const percent = target > 0 ? Math.round(actual / target * 1000) / 10 : null;

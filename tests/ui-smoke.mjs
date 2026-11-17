@@ -26,8 +26,10 @@ try {
   const errors = [];
   page.on('pageerror',error=>errors.push(error.message));
   const accounts = [{id:1,name:'Everyday',iban:'EE000000000000001234',currency:'EUR',balance:'9999999999999999.99',monitored:true},{id:2,name:'Travel',currency:'XXX',balance:'10.25',monitored:true}];
-  const categories = [{id:1,name:'Food',icon:'🛒',budget:200,spent:30,earned:0,enabled:true},{id:2,name:'Salary',icon:'💰',budget:-3000,spent:0,earned:2500,enabled:true}];
   const now = new Date(), month = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const monthDays = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const monthlyBudget = row => Math.round(Number(row.budget||0)*(row.budget_period==='day'?monthDays:row.budget_period==='week'?monthDays/7:1)*100)/100;
+  const categories = [{id:1,name:'Food',icon:'🛒',budget:200,budget_period:'month',monthly_budget:200,spent:30,earned:0,enabled:true},{id:2,name:'Salary',icon:'💰',budget:-3000,budget_period:'month',monthly_budget:-3000,spent:0,earned:2500,enabled:true}];
   const transactions = [{id:2,account_id:1,description:'Salary',amount:2500,amount_exact:'2500.00',currency:'EUR',direction:'CRDT',category_id:2,splits:[],date:month+'-02',date_kind:'booking'},{id:1,account_id:1,counterparty_name:'Transport Company',description:'<img src=x onerror=alert(1)> '+ 'Long bank description '.repeat(9),amount:30,amount_exact:'30.00',currency:'EUR',direction:'DBIT',category_id:null,splits:[],date:month+'-01',date_kind:'transaction'}];
   let failBalance = false, failStatistics = false, failMonitor = false, failCategory = false, emptyMonth = false, expireEvents = false;
   let lastCategoryPatch;
@@ -42,7 +44,7 @@ try {
   const planSnapshot = selectedMonth => ({
     month: selectedMonth, is_current_month: selectedMonth === month,
     totals: [{currency:'EUR',balance:accounts[0].balance,expected_income:'500.00',expected_expense:'170.00',closing_balance:selectedMonth === month ? '10000000000000329.99' : null}],
-    categories: categories.map(row => ({...row,budget:String(row.budget),currency:row.currency || 'EUR',forecast_mode:row.forecast_mode || 'budget',payment_status:row.payment_status || 'auto',actual:String(row.budget < 0 ? row.earned : row.spent),remaining:row.enabled ? '170.00' : '0.00'})),
+    categories: categories.map(row => ({...row,budget:String(row.budget),monthly_budget:String(row.monthly_budget),currency:row.currency || 'EUR',forecast_mode:row.forecast_mode || 'budget',payment_status:row.payment_status || 'auto',actual:String(row.monthly_budget < 0 ? row.earned : row.spent),remaining:row.enabled ? '170.00' : '0.00'})),
     items: planItems.filter(row => row.month === selectedMonth).map(row => ({...row,actual:'0.00',remaining:row.payment_status === 'closed' ? '0.00' : row.amount})),
   });
   await page.route('**/api/**',async route=>{
@@ -101,7 +103,9 @@ try {
       const row=transactions.find(item=>item.id===Number(path.split('/')[3]));
       row.splits=request.postDataJSON().splits;row.category_id=null;
     } else if (path==='/api/categories' && request.method()==='POST') {
-      categories.push({...request.postDataJSON(),id:3,spent:0,earned:0,enabled:true});
+      const category={budget_period:'month',...request.postDataJSON(),id:3,spent:0,earned:0,enabled:true};
+      category.monthly_budget=monthlyBudget(category);
+      categories.push(category);
     } else if (/^\/api\/categories\/\d+$/.test(path)) {
       categoryPatchCount++;
       if (failCategory) {await route.fulfill({status:500,json:{detail:'test failure'}});return;}
@@ -112,6 +116,7 @@ try {
       }
       lastCategoryPatch=request.postDataJSON();
       Object.assign(category,request.postDataJSON());
+      category.monthly_budget=monthlyBudget(category);
     }
     await route.fulfill({json:result});
   });
@@ -352,9 +357,12 @@ try {
   await page.locator('[data-view="categories"]').click();
   await page.locator('#category-form [name=name]').fill('Freelance');
   await page.locator('#category-form [name=budget]').fill('-500');
+  await page.locator('#category-form [name=budget_period]').selectOption('week');
   await page.locator('#category-form button[type=submit]').click();
   await page.locator('[data-manager-category="3"]').waitFor();
   assert.equal(categories[2].budget,-500);
+  assert.equal(categories[2].budget_period,'week');
+  assert.equal(await page.locator('[data-category-budget-period="3"]').inputValue(),'week');
   const categoryName = page.locator('[data-category-name="3"]');
   await categoryName.fill('  Consulting  ');
   await categoryName.press('Enter');

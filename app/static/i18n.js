@@ -1,6 +1,10 @@
 export const messages = {
   'План': ['Plan', 'Plaan'],
   'План месяца': ['Monthly plan', 'Kuu plaan'],
+  'Период бюджета': ['Budget period', 'Eelarve periood'],
+  'За месяц': ['Per month', 'Kuu kohta'],
+  'За неделю': ['Per week', 'Nädala kohta'],
+  'За день': ['Per day', 'Päeva kohta'],
   'План, факт и ожидаемый остаток': ['Plan, actuals and expected balance', 'Plaan, tegelik ja oodatav saldo'],
   'Прогноз месяца': ['Monthly forecast', 'Kuu prognoos'],
   'Открыть план': ['Open plan', 'Ava plaan'],

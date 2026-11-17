@@ -79,6 +79,11 @@ describe('frontend helpers', () => {
       .toMatchObject({ remaining: 100, percent: 0, status: 'income-pending' });
   });
 
+  test('uses the calculated monthly budget for recurring periods', () => {
+    expect(categoryBudgetState({ budget: 10, monthly_budget: 300, spent: 75 }))
+      .toMatchObject({ budget: 300, remaining: 225, percent: 25, status: 'within' });
+  });
+
   test('builds a month query without losing existing parameters', () => {
     expect(buildMonthQuery('/api/expenses', '2026-11')).toBe('/api/expenses?month=2026-11');
     expect(buildMonthQuery('/api/expenses?limit=10', '2026-11')).toBe('/api/expenses?limit=10&month=2026-11');
