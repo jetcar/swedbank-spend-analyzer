@@ -14,6 +14,12 @@ class CategoryBudgetPeriodTest(unittest.TestCase):
         self.assertEqual(effective_monthly_budget(Decimal("10"), "day", "2026-04"), Decimal("300.00"))
         self.assertEqual(effective_monthly_budget(Decimal("10"), "day", "2026-01"), Decimal("310.00"))
 
+    def test_large_daily_amount_keeps_exact_cents(self):
+        self.assertEqual(
+            effective_monthly_budget(Decimal("9999999999999.99"), "day", "2026-01"),
+            Decimal("309999999999999.69"),
+        )
+
     def test_weekly_amount_is_prorated_and_rounded_to_cents(self):
         self.assertEqual(effective_monthly_budget(Decimal("100"), "week", "2026-11"), Decimal("428.57"))
         self.assertEqual(effective_monthly_budget(Decimal("100"), "week", "2026-12"), Decimal("442.86"))

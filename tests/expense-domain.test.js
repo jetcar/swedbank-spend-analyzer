@@ -84,6 +84,11 @@ describe('frontend helpers', () => {
       .toMatchObject({ budget: 300, remaining: 225, percent: 25, status: 'within' });
   });
 
+  test('compares large calculated budgets without losing cents', () => {
+    expect(categoryBudgetState({ monthly_budget: '309999999999999.69', spent: '309999999999999.69' }))
+      .toMatchObject({ remaining: 0, percent: 100, status: 'reached' });
+  });
+
   test('builds a month query without losing existing parameters', () => {
     expect(buildMonthQuery('/api/expenses', '2026-11')).toBe('/api/expenses?month=2026-11');
     expect(buildMonthQuery('/api/expenses?limit=10', '2026-11')).toBe('/api/expenses?limit=10&month=2026-11');

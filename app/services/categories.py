@@ -135,7 +135,7 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
         earned = {category_id: amount for category_id, _, amount in totals}
     return [
         {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": float(category.budget or 0),
-         "budget_period": category.budget_period, "monthly_budget": float(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+         "budget_period": category.budget_period, "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
          "enabled": category.enabled, "spent": float(spent.get(category.id) or 0), "earned": float(earned.get(category.id) or 0),
          "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status}
         for category in categories
@@ -162,7 +162,7 @@ async def create_category(*, category_input: schemas.NewCategory, owner_id: str)
         await db.refresh(category)
     return {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month,
             "budget": float(category.budget or 0), "budget_period": category.budget_period,
-            "monthly_budget": float(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)), "enabled": category.enabled}
+            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)), "enabled": category.enabled}
 
 
 async def update_category(*, category_id: int, settings: schemas.CategorySettings, owner_id: str) -> dict[str, Any]:
@@ -210,7 +210,7 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             raise
     return {"id": category_id, "name": category.name, "budget": float(category.budget or 0),
             "budget_period": category.budget_period,
-            "monthly_budget": float(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
+            "monthly_budget": str(effective_monthly_budget(category.budget or 0, category.budget_period, category.month)),
             "enabled": category.enabled, "icon": category.icon}
 
 
