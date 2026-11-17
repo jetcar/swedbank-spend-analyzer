@@ -26,6 +26,13 @@ def remaining(amount: Decimal, actual: Decimal, status: str, *, mode: str = "pay
     return max(abs(amount) - actual, ZERO)
 
 
+def recurring_forecast_target(monthly: Decimal, available: Decimal, actual: Decimal, period: str) -> Decimal:
+    if period not in ("day", "week"):
+        return monthly
+    overrun = max(actual - abs(available), ZERO)
+    return abs(monthly) + overrun
+
+
 def monthly_transactions(owner_id: str, month: str):
     start, end = dates.month_bounds(month)
     effective_date = func.coalesce(Transaction.booking_date, Transaction.value_date)
@@ -117,10 +124,12 @@ async def list_plan(*, month: str | None, language: str, owner_id: str) -> dict[
         available = effective_available_budget(source_amount, category.budget_period, category.month)
         direction = "CRDT" if amount < ZERO else "DBIT"
         actual = actuals[(category.id, direction, category.currency)]
-        pending = remaining(available, actual, category.payment_status, mode=category.forecast_mode) if category.enabled else ZERO
+        forecast_target = recurring_forecast_target(amount, available, actual, category.budget_period)
+        pending = remaining(forecast_target, actual, category.payment_status, mode=category.forecast_mode) if category.enabled else ZERO
         category_rows.append({
             "id": category.id, "name": category.name, "icon": category.icon, "budget": money(source_amount),
             "budget_period": category.budget_period, "monthly_budget": money(amount), "available_budget": money(available),
+            "forecast_budget": money(forecast_target),
             "currency": category.currency, "forecast_mode": category.forecast_mode,
             "payment_status": category.payment_status, "enabled": category.enabled,
             "actual": money(actual), "remaining": money(pending),

@@ -118,8 +118,8 @@ class MonthForecastTest(unittest.IsolatedAsyncioTestCase):
     async def test_month_copy_preserves_settings_and_resets_payment_status(self):
         await self.category("Loan", "150", forecast_mode="payment", currency="USD", payment_status="closed", budget_period="week")
         row = (await self.plan("2026-12"))["categories"][0]
-        self.assertEqual((row["name"], row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["currency"], row["forecast_mode"], row["payment_status"], row["remaining"]),
-                         ("Loan", "150.00", "week", "664.29", "0.00", "USD", "payment", "auto", "0.00"))
+        self.assertEqual((row["name"], row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["forecast_budget"], row["currency"], row["forecast_mode"], row["payment_status"], row["remaining"]),
+                         ("Loan", "150.00", "week", "664.29", "0.00", "664.29", "USD", "payment", "auto", "664.29"))
         self.assertEqual((await self.plan("2026-12"))["items"], [])
 
     async def test_daily_budget_is_calculated_for_selected_month(self):
@@ -128,8 +128,17 @@ class MonthForecastTest(unittest.IsolatedAsyncioTestCase):
                         if row["id"] == category_id)
         self.assertEqual((category["monthly_budget"], category["available_budget"]), ("300.00", "170.00"))
         row = next(row for row in (await self.plan())["categories"] if row["id"] == category_id)
-        self.assertEqual((row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["remaining"]),
-                         ("10.00", "day", "300.00", "170.00", "170.00"))
+        self.assertEqual((row["budget"], row["budget_period"], row["monthly_budget"], row["available_budget"], row["forecast_budget"], row["remaining"]),
+                         ("10.00", "day", "300.00", "170.00", "300.00", "300.00"))
+
+    async def test_daily_budget_overrun_is_included_in_overall_forecast(self):
+        category_id = await self.category("Meals", "10", budget_period="day")
+        await self.transaction("180", category_id)
+        plan = await self.plan()
+        row = next(row for row in plan["categories"] if row["id"] == category_id)
+        self.assertEqual((row["actual"], row["available_budget"], row["monthly_budget"], row["forecast_budget"], row["remaining"]),
+                         ("180.00", "170.00", "300.00", "310.00", "130.00"))
+        self.assertEqual((plan["totals"][0]["expected_expense"], plan["totals"][0]["closing_balance"]), ("130.00", "690.00"))
 
     async def test_splits_reserved_once_and_delete_releases_allocations(self):
         first = await self.category("Food", "100")
