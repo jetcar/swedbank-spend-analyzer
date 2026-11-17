@@ -5,6 +5,8 @@ import { icon } from './icons.js';
 import { renderBudgetStatus } from './budget-status.js';
 import { $, empty, maskAccount } from './dashboard-ui.js';
 
+const CHART_RANGE_STORAGE_KEY = 'finance.chartRange';
+
 function totalsMarkup(rows, amount) {
   return currencyTotals(rows, amount).map(total => `<span>${escapeHtml(money(total.amount, total.currency))}</span>`).join('') || '—';
 }
@@ -42,5 +44,16 @@ export function createOverviewView({ state, renderRow, bindRows, openCategory })
     $('#cashflow').innerHTML = `<svg class="cashflow-svg" viewBox="0 0 520 215" role="img" aria-label="${escapeHtml(tr('Доходы и расходы за выбранный период'))}">${grid}${bars}</svg>`;
   }
 
-  return { render: renderOverview, bind() { $('#chart-currency').onchange = renderChart; $('#chart-range').onchange = renderChart; } };
+  return { render: renderOverview, bind() {
+    const range = $('#chart-range');
+    try {
+      const saved = localStorage.getItem(CHART_RANGE_STORAGE_KEY);
+      if ([...range.options].some(option => option.value === saved)) range.value = saved;
+    } catch {}
+    $('#chart-currency').onchange = renderChart;
+    range.onchange = () => {
+      try { localStorage.setItem(CHART_RANGE_STORAGE_KEY, range.value); } catch {}
+      renderChart();
+    };
+  } };
 }
