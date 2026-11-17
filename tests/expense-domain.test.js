@@ -88,8 +88,12 @@ describe('frontend helpers', () => {
   });
 
   test('uses the accrued budget for recurring-period status', () => {
-    expect(categoryBudgetState({ monthly_budget: '300.00', available_budget: '170.00', spent: '180.00' }))
+    const category = { id: 1, budget_period: 'day', monthly_budget: '300.00', available_budget: '170.00', spent: '180.00' };
+    expect(categoryBudgetState(category))
       .toMatchObject({ budget: '170.00', remaining: '-10.00', status: 'over' });
+    const rendered = renderBudgetStatus(category);
+    expect(rendered).toContain('170,00');
+    expect(rendered).toContain('300,00');
   });
 
   test('zero accrued recurring budget is limited rather than unlimited', () => {
