@@ -7,7 +7,7 @@ export function renderBudgetStatus(category) {
   const remaining = state.remaining == null ? null : Number(state.remaining);
   const positive = value => String(value).replace(/^-/, '');
   const monthly = category.budget_period === 'month' ? ''
-    : ` · ${tr('За месяц')}: ${money(positive(category.monthly_budget ?? category.budget))}`;
+    : ` · ${tr('За месяц')}: ${money(state.projectedBudget)}`;
   const label = income
     ? remaining > 0 ? tr('Осталось заработать {amount}', { amount: money(state.remaining) })
       : remaining === 0 ? tr('План дохода выполнен') : tr('Сверх плана {amount}', { amount: money(positive(state.remaining)) })
