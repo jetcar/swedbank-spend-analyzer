@@ -29,6 +29,8 @@ Calculated targets are rounded to cents. Negative amounts remain income targets.
 
 For `day` and `week`, responses also expose an `available_budget` accrued through the current Europe/Tallinn calendar day. In the current month it equals the source amount multiplied by elapsed calendar days (and divided by 7 for weekly budgets). Past months accrue the full monthly target; future months accrue zero. Monthly budgets always use their full target. Spending and remaining status compare against `available_budget`, while `monthly_budget` remains the full-month projection.
 
+The category card shows a dynamic projected month total for daily and weekly expense budgets: `monthly_budget + max(spent - available_budget, 0)`. Future daily/weekly allowances therefore remain on top of any current overspending. The projection falls when later savings absorb that overspending and stays level when new spending matches the newly accrued allowance.
+
 ## Testing strategy
 
 - Unit-test monthly conversion for 28-, 29-, 30-, and 31-day months, including weekly cent rounding and negative income targets.

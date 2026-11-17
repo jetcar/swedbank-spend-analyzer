@@ -58,7 +58,7 @@ describe('frontend helpers', () => {
     [42, 0, 'unlimited', null, null],
   ])('budget %s / %s has status %s', (spent, budget, status, remaining, percent) => {
     const money = value => value == null ? value : Number(value).toFixed(2);
-    expect(categoryBudgetState({ spent, budget })).toEqual({ spent: money(spent), budget: money(budget),
+    expect(categoryBudgetState({ spent, budget })).toEqual({ spent: money(spent), budget: money(budget), projectedBudget: money(Math.abs(budget)),
       status, remaining: money(remaining), percent });
   });
 
@@ -74,7 +74,7 @@ describe('frontend helpers', () => {
     [125.5, -25.5, 125.5, 'income-reached'],
   ])('tracks income %s against a negative budget', (earned, remaining, percent, status) => {
     expect(categoryBudgetState({ budget: -100, spent: 50, earned }))
-      .toEqual({ budget: '-100.00', spent: '50.00', remaining: Number(remaining).toFixed(2), percent, status });
+      .toEqual({ budget: '-100.00', projectedBudget: '100.00', spent: '50.00', remaining: Number(remaining).toFixed(2), percent, status });
   });
 
   test('a negative budget without income starts at zero progress', () => {
@@ -90,10 +90,17 @@ describe('frontend helpers', () => {
   test('uses the accrued budget for recurring-period status', () => {
     const category = { id: 1, budget_period: 'day', monthly_budget: '300.00', available_budget: '170.00', spent: '180.00' };
     expect(categoryBudgetState(category))
-      .toMatchObject({ budget: '170.00', remaining: '-10.00', status: 'over' });
+      .toMatchObject({ budget: '170.00', projectedBudget: '310.00', remaining: '-10.00', status: 'over' });
     const rendered = renderBudgetStatus(category);
     expect(rendered).toContain('170,00');
-    expect(rendered).toContain('300,00');
+    expect(rendered).toContain('310,00');
+  });
+
+  test('adds current overspending to the projected monthly recurring budget', () => {
+    const state = categoryBudgetState({ budget_period: 'day', monthly_budget: '1260.00', available_budget: '714.00', spent: '933.00' });
+    expect(state).toMatchObject({ remaining: '-219.00', projectedBudget: '1479.00', status: 'over' });
+    expect(renderBudgetStatus({ id: 1, budget_period: 'day', monthly_budget: '1260.00', available_budget: '714.00', spent: '933.00' }))
+      .toContain('1 479,00');
   });
 
   test('zero accrued recurring budget is limited rather than unlimited', () => {

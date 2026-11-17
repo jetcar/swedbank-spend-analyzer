@@ -32,10 +32,14 @@ export function categoryBudgetState(category) {
   };
   const spent = cents(category.spent);
   const budget = cents(category.available_budget ?? category.monthly_budget ?? category.budget);
-  const income = cents(category.monthly_budget ?? category.budget) < 0n;
+  const monthlyBudget = cents(category.monthly_budget ?? category.budget);
+  const income = monthlyBudget < 0n;
   const actual = income ? cents(category.earned) : spent;
   const target = budget < 0n ? -budget : budget;
   const limited = target > 0n || ['day', 'week'].includes(category.budget_period);
+  const recurring = ['day', 'week'].includes(category.budget_period);
+  const overrun = recurring && !income && spent > target ? spent - target : 0n;
+  const projectedBudget = (monthlyBudget < 0n ? -monthlyBudget : monthlyBudget) + overrun;
   const percent = target > 0n ? Number((actual * 1000n + target / 2n) / target) / 10 : null;
   const amount = value => {
     const sign = value < 0n ? '-' : '';
@@ -45,6 +49,7 @@ export function categoryBudgetState(category) {
   return {
     spent: amount(spent),
     budget: amount(budget),
+    projectedBudget: amount(projectedBudget),
     remaining: limited ? amount(target - actual) : null,
     percent,
     status: income ? (actual >= target ? 'income-reached' : 'income-pending')
