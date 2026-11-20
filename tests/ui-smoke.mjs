@@ -523,6 +523,18 @@ try {
     await page.waitForFunction(lang=>document.documentElement.lang===lang,language);
     assert.equal(await page.locator('#add-plan-item').innerText(),{en:'Add',et:'Lisa',ru:'Добавить'}[language]);
   }
+  transactions.push(...Array.from({length:4},(_,index)=>({
+    id:10+index,account_id:999,description:`Older transaction ${index}`,amount:1,amount_exact:'1.00',
+    currency:'EUR',direction:'DBIT',category_id:999,splits:[],date:month+`-${String(10-index).padStart(2,'0')}`,date_kind:'booking',
+  })));
+  await page.reload();
+  await page.locator('[data-view="overview"]').click();
+  await page.locator('#recent-transactions .transaction-row').first().waitFor();
+  assert.equal(await page.locator('#recent-transactions .transaction-row').count(),5);
+  assert.equal(await page.locator('#load-more-recent').isVisible(),true);
+  await page.locator('#load-more-recent').click();
+  assert.equal(await page.locator('#recent-transactions .transaction-row').count(),6);
+  assert.equal(await page.locator('#load-more-recent').isHidden(),true);
   emptyMonth=true;
   await page.locator('#category-month').fill('2025-01');
   await page.waitForFunction(()=>!document.querySelector('#plan-forecast .forecast-value'));

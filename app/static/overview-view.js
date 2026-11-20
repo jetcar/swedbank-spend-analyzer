@@ -12,6 +12,19 @@ function totalsMarkup(rows, amount) {
 }
 
 export function createOverviewView({ state, renderRow, bindRows, openCategory }) {
+  let recentLimit = 5;
+  let recentMonth = state.selectedMonth;
+
+  function renderRecentTransactions() {
+    if (recentMonth !== state.selectedMonth) {
+      recentMonth = state.selectedMonth;
+      recentLimit = 5;
+    }
+    $('#recent-transactions').innerHTML = state.transactions.slice(0, recentLimit).map(renderRow).join('') || empty(tr('Нет операций за этот месяц'));
+    bindRows($('#recent-transactions'));
+    $('#load-more-recent').hidden = recentLimit >= state.transactions.length;
+  }
+
   function renderOverview() {
     const included = state.transactions.filter(row => !row.excluded_from_statistics);
     const tracked = state.accounts.filter(account => account.monitored);
@@ -23,8 +36,7 @@ export function createOverviewView({ state, renderRow, bindRows, openCategory })
     $('#account-summary').innerHTML = tracked.slice(0,3).map(account => `<div class="compact-account"><span class="account-icon">${icon('bank')}</span><div class="account-info"><strong>${escapeHtml(account.name || tr('Счёт {id}', {id:account.id}))}</strong><span class="muted">${escapeHtml(maskAccount(account))}</span></div><b>${escapeHtml(money(account.balance, account.currency || 'XXX'))}</b></div>`).join('') || empty(tr('Выберите, что отслеживать'));
     $('#budget-summary').innerHTML = state.categories.filter(category => category.enabled).map(category => `<button type="button" class="budget-row budget-link" data-overview-category="${escapeHtml(category.id)}"><span class="budget-icon">${escapeHtml(category.icon)}</span><span class="budget-row-main"><strong>${escapeHtml(category.name)}</strong>${renderBudgetStatus(category)}</span></button>`).join('') || empty(tr('В этом месяце категорий нет'));
     document.querySelectorAll('[data-overview-category]').forEach(button => button.onclick = () => openCategory(Number(button.dataset.overviewCategory)));
-    $('#recent-transactions').innerHTML = state.transactions.slice(0,5).map(renderRow).join('') || empty(tr('Нет операций за этот месяц'));
-    bindRows($('#recent-transactions'));
+    renderRecentTransactions();
     const currency = $('#chart-currency').value;
     const currencies = [...new Set(state.chartTransactions.filter(row => !row.excluded_from_statistics).map(row => row.currency || 'XXX'))];
     $('#chart-currency').innerHTML = currencies.map(item => `<option>${escapeHtml(item)}</option>`).join('');
@@ -51,6 +63,10 @@ export function createOverviewView({ state, renderRow, bindRows, openCategory })
       if ([...range.options].some(option => option.value === saved)) range.value = saved;
     } catch {}
     $('#chart-currency').onchange = renderChart;
+    $('#load-more-recent').onclick = () => {
+      recentLimit += 5;
+      renderRecentTransactions();
+    };
     range.onchange = () => {
       try { localStorage.setItem(CHART_RANGE_STORAGE_KEY, range.value); } catch {}
       renderChart();
