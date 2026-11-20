@@ -145,6 +145,7 @@ export const messages = {
   '{percent} плана дохода выполнено': ['{percent} of income target reached', '{percent} tulueesmärgist täidetud'],
   'Добавить категорию': ['Add category', 'Lisa kategooria'],
   'Последние операции': ['Latest transactions', 'Viimased tehingud'],
+  'Загрузить ещё': ['Load more', 'Laadi veel'],
   'По дням': ['By day', 'Päevade kaupa'],
   'Дата': ['Date', 'Kuupäev'],
   'Дата бронирования': ['Booking date', 'Kande kuupäev'],
