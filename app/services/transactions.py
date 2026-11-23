@@ -45,19 +45,32 @@ async def list_transactions(*, limit: int, month: str | None, days: int | None, 
             ).all()
         )
         splits_by_id: dict[int, list[dict[str, Any]]] = {}
+        categories_by_id: dict[int, dict[str, Any]] = {}
         if transactions:
             splits = (await db.scalars(select(ExpenseSplit).where(
                 ExpenseSplit.transaction_id.in_([transaction.id for transaction in transactions])
             ))).all()
+            category_ids = {transaction.category_id for transaction in transactions if transaction.category_id is not None}
+            category_ids.update(split.category_id for split in splits)
+            if category_ids:
+                categories_by_id = {
+                    category.id: {"id": category.id, "name": category.name, "icon": category.icon}
+                    for category in (await db.scalars(select(Category).where(
+                        Category.owner_id == owner_id, Category.id.in_(category_ids)
+                    ))).all()
+                }
             for split in splits:
                 splits_by_id.setdefault(split.transaction_id, []).append({
-                    "category_id": split.category_id, "amount": float(split.amount),
+                    "category_id": split.category_id,
+                    "amount": float(split.amount),
+                    "category": categories_by_id.get(split.category_id),
                 })
     return [
         {
             "id": transaction.id,
             "account_id": transaction.account_id,
             "category_id": transaction.category_id,
+            "category_details": categories_by_id.get(transaction.category_id),
             "splits": splits_by_id.get(transaction.id, []),
             **dates.transaction_date_details(transaction),
             "planning_month": planning_month(transaction),

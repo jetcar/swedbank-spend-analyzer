@@ -25,20 +25,53 @@ export function filterTransactions(rows, { search = '', account = '', category =
     && (!category || (category === 'none' ? row.category_id == null && !row.splits?.length
       : row.category_id === Number(category) || row.splits?.some(part => part.category_id === Number(category)))));
 }
+function categoryAllocation(row, amount) {
+  const category = row.category_details;
+  return {
+    key: category ? `${category.icon || ''}|${category.name}` : 'uncategorized',
+    name: category?.name || '',
+    icon: category?.icon || '',
+    amount,
+  };
+}
+function addCategory(target, allocation) {
+  const existing = target.get(allocation.key);
+  if (existing) existing.amount += allocation.amount;
+  else target.set(allocation.key, allocation);
+}
 export function buildCashflowDays(rows, range, now = new Date()) {
   const length = Math.max(1, Math.min(30, Number(range) || 30));
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const days = Array.from({ length }, (_, index) => {
     const value = new Date(end);
     value.setUTCDate(value.getUTCDate() - (length - index - 1));
-    return { date: value.toISOString().slice(0, 10), income: 0, expense: 0 };
+    return { date: value.toISOString().slice(0, 10), income: 0, expense: 0, incomeCategories: [], expenseCategories: [] };
   });
   const byDate = new Map(days.map(day => [day.date, day]));
+  const categoryTotals = new Map(days.map(day => [day.date, { income: new Map(), expense: new Map() }]));
   for (const row of rows) {
     const day = byDate.get(row.date?.slice(0, 10));
     if (day && ['CRDT', 'DBIT'].includes(row.direction)) {
-      day[row.direction === 'CRDT' ? 'income' : 'expense'] += Math.abs(Number(row.amount_exact ?? row.amount) || 0);
+      const direction = row.direction === 'CRDT' ? 'income' : 'expense';
+      const amount = Math.abs(Number(row.amount_exact ?? row.amount) || 0);
+      day[direction] += amount;
+      const totals = categoryTotals.get(day.date)[direction];
+      if (row.splits?.length) {
+        for (const split of row.splits) {
+          const category = split.category;
+          addCategory(totals, {
+            key: category ? `${category.icon || ''}|${category.name}` : 'uncategorized',
+            name: category?.name || '', icon: category?.icon || '',
+            amount: Math.abs(Number(split.amount) || 0),
+          });
+        }
+      } else addCategory(totals, categoryAllocation(row, amount));
     }
+  }
+  for (const day of days) {
+    const totals = categoryTotals.get(day.date);
+    day.incomeCategories = [...totals.income.values()].sort((a, b) => b.amount - a.amount);
+    day.expenseCategories = [...totals.expense.values()].sort((a, b) => b.amount - a.amount);
   }
   return days;
 }

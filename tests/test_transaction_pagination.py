@@ -40,6 +40,8 @@ class TransactionPaginationTest(unittest.IsolatedAsyncioTestCase):
                 first = (await client.get("/api/transactions",params=params)).json()
                 self.assertEqual([row["id"] for row in first], [ids[0][2], ids[0][1]])
                 self.assertEqual(first[0]["splits"][0]["amount"],10.25)
+                self.assertEqual(first[0]["splits"][0]["category"]["name"], "Food")
+                self.assertEqual(first[0]["category_details"]["name"], "Food")
                 self.assertIsInstance(first[0]["account_id"],int)
                 second = (await client.get("/api/transactions",params={**params,"before_id":first[-1]["id"]})).json()
                 self.assertEqual([row["id"] for row in second],[ids[0][0]])

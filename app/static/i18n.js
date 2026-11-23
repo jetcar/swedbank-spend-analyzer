@@ -148,6 +148,7 @@ export const messages = {
   'Загрузить ещё': ['Load more', 'Laadi veel'],
   'По дням': ['By day', 'Päevade kaupa'],
   'Дата': ['Date', 'Kuupäev'],
+  'Всего': ['Total', 'Kokku'],
   'Дата бронирования': ['Booking date', 'Kande kuupäev'],
   'Дата операции': ['Transaction date', 'Tehingu kuupäev'],
   'Дата валютирования': ['Value date', 'Väärtuspäev'],

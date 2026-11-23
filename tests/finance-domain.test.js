@@ -29,10 +29,33 @@ test('cashflow ranges include only the requested trailing calendar days', () => 
     {date:'2026-11-10T08:00:00Z',direction:'DBIT',amount_exact:'99.00'},
   ];
   expect(buildCashflowDays(rows, 3, new Date('2026-11-14T12:00:00Z'))).toEqual([
-    {date:'2026-11-12',income:20,expense:0},
-    {date:'2026-11-13',income:0,expense:0},
-    {date:'2026-11-14',income:0,expense:12.5},
+    {date:'2026-11-12',income:20,expense:0,incomeCategories:[{key:'uncategorized',name:'',icon:'',amount:20}],expenseCategories:[]},
+    {date:'2026-11-13',income:0,expense:0,incomeCategories:[],expenseCategories:[]},
+    {date:'2026-11-14',income:0,expense:12.5,incomeCategories:[],expenseCategories:[{key:'uncategorized',name:'',icon:'',amount:12.5}]},
   ]);
+});
+test('cashflow stacks direct and split amounts by category', () => {
+  const rows = [
+    {date:'2026-11-14',direction:'DBIT',amount_exact:'12.50',category_details:{id:1,name:'Food',icon:'🍲'}},
+    {date:'2026-11-14',direction:'DBIT',amount_exact:'10.00',splits:[
+      {category_id:1,amount:4,category:{id:1,name:'Food',icon:'🍲'}},
+      {category_id:2,amount:6,category:{id:2,name:'Travel',icon:'🚌'}},
+    ]},
+  ];
+  const [day] = buildCashflowDays(rows, 1, new Date('2026-11-14T12:00:00Z'));
+  expect(day.expense).toBe(22.5);
+  expect(day.expenseCategories).toEqual([
+    {key:'🍲|Food',name:'Food',icon:'🍲',amount:16.5},
+    {key:'🚌|Travel',name:'Travel',icon:'🚌',amount:6},
+  ]);
+});
+test('uncategorized bank labels cannot mislabel a combined chart segment', () => {
+  const rows = [
+    {date:'2026-11-14',direction:'DBIT',amount_exact:'3.00',category:'Bank label A'},
+    {date:'2026-11-14',direction:'DBIT',amount_exact:'4.00',category:'Bank label B'},
+  ];
+  const [day] = buildCashflowDays(rows, 1, new Date('2026-11-14T12:00:00Z'));
+  expect(day.expenseCategories).toEqual([{key:'uncategorized',name:'',icon:'',amount:7}]);
 });
 test('loads every page before totals and sorts by banking date, independently of insertion order', async () => {
   const first = Array.from({length:1000},(_,i) => ({id:1002-i,date:'2026-11-01',currency:'EUR',amount_exact:'0.01'}));
