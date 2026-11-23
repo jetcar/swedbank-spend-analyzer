@@ -30,7 +30,7 @@ try {
   const monthDays = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   const monthlyBudget = row => Math.round(Number(row.budget||0)*(row.budget_period==='day'?monthDays:row.budget_period==='week'?monthDays/7:1)*100)/100;
   const categories = [{id:1,name:'Food',icon:'🛒',budget:200,budget_period:'month',monthly_budget:200,spent:30,earned:0,enabled:true},{id:2,name:'Salary',icon:'💰',budget:-3000,budget_period:'month',monthly_budget:-3000,spent:0,earned:2500,enabled:true}];
-  const transactions = [{id:2,account_id:1,description:'Salary',amount:2500,amount_exact:'2500.00',currency:'EUR',direction:'CRDT',category_id:2,splits:[],date:month+'-02',date_kind:'booking'},{id:1,account_id:1,counterparty_name:'Transport Company',description:'<img src=x onerror=alert(1)> '+ 'Long bank description '.repeat(9),amount:30,amount_exact:'30.00',currency:'EUR',direction:'DBIT',category_id:null,splits:[],date:month+'-01',date_kind:'transaction'}];
+  const transactions = [{id:2,account_id:1,description:'Salary',amount:2500,amount_exact:'2500.00',currency:'EUR',direction:'CRDT',category_id:2,category_details:{id:2,name:'Salary',icon:'💰'},splits:[],date:month+'-02',date_kind:'booking'},{id:1,account_id:1,counterparty_name:'Transport Company',description:'<img src=x onerror=alert(1)> '+ 'Long bank description '.repeat(9),amount:30,amount_exact:'30.00',currency:'EUR',direction:'DBIT',category_id:null,splits:[],date:month+'-01',date_kind:'transaction'}];
   let failBalance = false, failStatistics = false, failMonitor = false, failCategory = false, emptyMonth = false, expireEvents = false;
   let lastCategoryPatch;
   let categoryPatchCount = 0;
@@ -149,6 +149,9 @@ try {
   assert.equal(await page.locator('#chart-range').inputValue(),'1');
   assert.equal(await page.locator('#cashflow .chart-income').count(),1);
   await page.locator('#chart-range').selectOption('30');
+  await page.locator('#cashflow .chart-segment.chart-income').hover();
+  assert.match(await page.locator('#cashflow .chart-tooltip').innerText(),/Salary/);
+  assert.match(await page.locator('#cashflow .chart-tooltip').innerText(),/2[\s,.]?500/);
   const layoutWidths = [1440,1100,900,768,761,760,375];
   const assertHeaderControlsFit = async width => {
     for (const control of await page.locator('.sidebar-footer select, .sidebar-footer button:not([hidden])').all()) {
