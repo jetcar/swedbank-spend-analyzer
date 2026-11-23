@@ -199,7 +199,7 @@ async def callback(request: Request, code: str | None = None, state: str | None 
         logger.exception("Passi token request failed")
         raise HTTPException(502, "Passi token endpoint is unavailable") from error
     if response.is_error:
-        logger.error("Passi token endpoint returned %s: %s", response.status_code, response.text[:500])
+        logger.error("Passi authorization exchange failed: HTTP %s", response.status_code)
         raise HTTPException(401, "Passi token exchange failed")
     tokens = response.json()
     id_token = tokens.get("id_token")

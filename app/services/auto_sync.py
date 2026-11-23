@@ -92,8 +92,10 @@ async def run_due_auto_sync() -> dict[str, int]:
             await bank_sync_service.sync_owner_transactions(owner_id)
         except Exception as error:
             failed += 1
-            logger.exception("Automatic bank sync failed for owner %s", owner_id)
-            await sync_state.record_auto_sync_result(owner_id, error=str(error) or type(error).__name__)
+            # Exception messages and tracebacks can contain bank data or SQL parameters.
+            error_kind = type(error).__name__
+            logger.error("Automatic bank sync failed for owner %s (%s)", owner_id, error_kind)
+            await sync_state.record_auto_sync_result(owner_id, error=error_kind)
         else:
             synced += 1
             await sync_state.record_auto_sync_result(owner_id, error=None)
@@ -106,6 +108,6 @@ async def auto_sync_loop() -> None:
             await run_due_auto_sync()
         except asyncio.CancelledError:
             raise
-        except Exception:
-            logger.exception("Automatic bank sync cycle failed")
+        except Exception as error:
+            logger.error("Automatic bank sync cycle failed (%s)", type(error).__name__)
         await asyncio.sleep(AUTO_SYNC_POLL_SECONDS)

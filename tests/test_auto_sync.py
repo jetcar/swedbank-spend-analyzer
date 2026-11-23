@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta, timezone
+import asyncio
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 import os
 import unittest
 
-from sqlalchemy import delete, text
+from sqlalchemy import create_engine, delete, text
+from sqlalchemy.exc import IntegrityError
 
 from app import database
+from app.logging_config import JsonFormatter
 from app.models import BankSession, BankSyncState, ControlBase
 from app.services import sync_state
 from app.services import auto_sync as auto_sync_service, bank_sync as bank_sync_service
@@ -59,8 +62,53 @@ class AutoSyncCycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sync_owner.await_count, 2)
         self.assertEqual(record_result.await_count, 2)
         self.assertEqual(record_result.await_args_list[0].args, ("first@example.com",))
-        self.assertIn("bank unavailable", record_result.await_args_list[0].kwargs["error"])
+        self.assertEqual("RuntimeError", record_result.await_args_list[0].kwargs["error"])
         self.assertEqual(record_result.await_args_list[1].kwargs, {"error": None})
+
+    def sensitive_database_error(self):
+        marker = "synthetic-private-transaction-description"
+        engine = create_engine("sqlite:///:memory:")
+        self.addCleanup(engine.dispose)
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE transactions (description TEXT UNIQUE)"))
+            statement = text("INSERT INTO transactions VALUES (:description)")
+            connection.execute(statement, {"description": marker})
+            try:
+                connection.execute(statement, {"description": marker})
+            except IntegrityError as error:
+                self.assertIn(marker, str(error))
+                return marker, error
+        self.fail("Expected a real database constraint error")
+
+    async def test_database_failure_does_not_leak_parameters_to_logs_or_sync_state(self):
+        marker, error = self.sensitive_database_error()
+        with (
+            patch.object(auto_sync_service, "discover_bank_owners", AsyncMock(return_value=["first@example.test", "second@example.test"])),
+            patch.object(auto_sync_service, "claim_auto_sync", AsyncMock(return_value=True)),
+            patch.object(bank_sync_service, "sync_owner_transactions", AsyncMock(side_effect=[error, {"accounts": 1}])),
+            patch.object(sync_state, "record_auto_sync_result", AsyncMock()) as record_result,
+            self.assertLogs(auto_sync_service.logger, level="ERROR") as logs,
+        ):
+            result = await auto_sync_service.run_due_auto_sync()
+        self.assertEqual(result, {"owners": 2, "synced": 1, "failed": 1})
+        self.assertEqual(record_result.await_args_list[0].kwargs, {"error": "IntegrityError"})
+        self.assertEqual(record_result.await_args_list[1].kwargs, {"error": None})
+        rendered = "\n".join(JsonFormatter().format(record) for record in logs.records)
+        self.assertNotIn(marker, rendered)
+        self.assertIn("IntegrityError", rendered)
+
+    async def test_outer_cycle_failure_does_not_log_database_parameters(self):
+        marker, error = self.sensitive_database_error()
+        with (
+            patch.object(auto_sync_service, "run_due_auto_sync", AsyncMock(side_effect=error)),
+            patch.object(auto_sync_service.asyncio, "sleep", AsyncMock(side_effect=asyncio.CancelledError)),
+            self.assertLogs(auto_sync_service.logger, level="ERROR") as logs,
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await auto_sync_service.auto_sync_loop()
+        rendered = "\n".join(JsonFormatter().format(record) for record in logs.records)
+        self.assertNotIn(marker, rendered)
+        self.assertIn("IntegrityError", rendered)
 
 
 @unittest.skipUnless(os.getenv("TEST_DATABASE_URL"), "A disposable PostgreSQL database is required")

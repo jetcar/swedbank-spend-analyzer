@@ -62,6 +62,38 @@ class OidcValidationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.callback({})).status_code, 307)
         self.assertEqual(len(self.store.sessions), 1)
 
+    async def test_token_exchange_error_does_not_log_response_body(self):
+        secret = "test-only-oauth-secret-sentinel"
+        client = MagicMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.post = AsyncMock(return_value=MagicMock(
+            is_error=True, status_code=400,
+            text=f'{{"error_description":"client_secret={secret}"}}',
+        ))
+        app = FastAPI()
+        store = app.state.auth_session_store = MemorySessionStore()
+        request = Request({"type": "http", "app": app, "session": {}})
+        state = "logging-test-state"
+        auth._pending[state] = ("verifier", "nonce", "/", False, time.time() + 60)
+        self.addCleanup(auth._pending.pop, state, None)
+        with (
+            patch.object(auth, "AUTH_ENABLED", True),
+            patch.object(auth.httpx, "AsyncClient", return_value=client),
+            self.assertLogs(auth.logger, level="ERROR") as logs,
+            self.assertRaises(HTTPException) as error,
+        ):
+            await auth.callback(request, "test-code", state, None)
+        self.assertEqual(error.exception.status_code, 401)
+        self.assertEqual(error.exception.detail, "Passi token exchange failed")
+        self.assertNotIn(secret, "\n".join(logs.output))
+        self.assertIn("400", "\n".join(logs.output))
+        self.assertEqual(len(logs.records), 1)
+        self.assertEqual(logs.records[0].args, (400,))
+        self.assertIsNone(logs.records[0].exc_info)
+        self.assertNotIn(state, auth._pending)
+        self.assertFalse(store.sessions)
+
     async def test_malformed_token_is_an_authentication_error(self):
         with self.assertRaises(HTTPException) as error:
             await auth._jwks_key("not-a-jwt")

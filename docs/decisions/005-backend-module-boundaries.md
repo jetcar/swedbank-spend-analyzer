@@ -26,7 +26,8 @@ with explicit module dependencies:
 | `main.py` | Compose middleware and routers; start and stop workers and storage |
 | `routers/` | HTTP parameters, identity binding, responses, pages and event streaming |
 | `services/accounts.py` | Account balances, monitoring and duplicate merging |
-| `services/categories.py` | Monthly defaults, budgets and category mutations |
+| `services/categories.py` | Category queries, budgets and category mutations |
+| `services/category_defaults.py` | Monthly category initialization and default localization shared by queries and rules |
 | `services/transactions.py` | Transaction queries, statistics flags, expense assignment and splits |
 | `services/reports.py` | Summary and daily aggregation |
 | `services/banking.py` | Single-use consent records and importing connected accounts |
