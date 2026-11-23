@@ -1,5 +1,6 @@
 """Statistics exclusions are reversible and do not change account balances."""
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 import unittest
@@ -60,8 +61,11 @@ class TransactionStatisticsTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(next(row for row in rows if row["id"] == self.rows[1].id)["splits"]), 2)
             self.assertEqual((await self.client.get("/api/accounts")).json()[0]["balance"], "50.00")
             categories = (await self.client.get("/api/categories?month=2098-06")).json()
-            self.assertEqual(sum(row["spent"] for row in categories), 10 if excluded else 50)
-            self.assertEqual(sum(row["earned"] for row in categories), 0 if excluded else 100)
+            for row in categories:
+                self.assertIsInstance(row["spent"], str)
+                self.assertIsInstance(row["earned"], str)
+            self.assertEqual(sum(Decimal(row["spent"]) for row in categories), Decimal("10.00") if excluded else Decimal("50.00"))
+            self.assertEqual(sum(Decimal(row["earned"]) for row in categories), Decimal("0.00") if excluded else Decimal("100.00"))
             for path in ("/api/summary", "/api/daily-summary", "/api/daily-breakdown?month=2098-06"):
                 response = await self.client.get(path)
                 self.assertEqual(response.status_code, 200, response.text)

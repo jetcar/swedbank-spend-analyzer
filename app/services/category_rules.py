@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, BankSession, Category, CategoryRule, ExpenseSplit, Transaction
 from app.transaction_details import transaction_counterparty_name
+from app.services.category_defaults import ensure_month_categories
 
 
 def transaction_merchant_key(transaction: Transaction) -> str | None:
@@ -54,7 +55,6 @@ async def apply_category_rules(
     )).all())
     months = {value for transaction in transactions if (value := transaction_month(transaction))}
     if months:
-        from app.services.categories import ensure_month_categories
         for transaction_month_value in sorted(months):
             await ensure_month_categories(db, owner_id, transaction_month_value)
     categories = list((await db.scalars(select(Category).where(
