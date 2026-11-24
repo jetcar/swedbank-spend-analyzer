@@ -377,6 +377,15 @@ try {
   assert.deepEqual(lastCategoryPatch,{name:'Consulting'});
   assert.equal(categories[2].budget,-500);
   assert.equal(await page.locator('#category-filter option[value="3"]').textContent(),`${categories[2].icon} Consulting`);
+  const ruleForm = page.locator('[data-category-rule-form="3"]');
+  await ruleForm.locator('[name="keyword"]').fill('CUBE CAFE');
+  await ruleForm.locator('button[type="submit"]').click();
+  await page.locator('[data-category-rule-remove="3"]').waitFor();
+  assert.deepEqual(lastCategoryPatch,{auto_keywords:['CUBE CAFE']});
+  assert.deepEqual(categories[2].auto_keywords,['CUBE CAFE']);
+  await page.locator('[data-category-rule-remove="3"]').click();
+  await page.waitForFunction(()=>!document.querySelector('[data-category-rule-remove="3"]'));
+  assert.deepEqual(lastCategoryPatch,{auto_keywords:[]});
   const savedPatchCount = categoryPatchCount;
   await categoryName.fill('Cancelled edit');
   await categoryName.press('Escape');

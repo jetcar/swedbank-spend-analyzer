@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -90,6 +91,7 @@ class Category(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(320), index=True)
     name: Mapped[str] = mapped_column(String(100))
+    rule_group: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()), nullable=False)
     icon: Mapped[str] = mapped_column(String(20), default="🏷️")
     month: Mapped[str] = mapped_column(String(7), default=lambda: datetime.utcnow().strftime("%Y-%m"))
     budget: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
@@ -114,6 +116,7 @@ class CategoryRule(Base):
     merchant_key: Mapped[str] = mapped_column(String(500))
     category_name: Mapped[str] = mapped_column(String(100))
     category_icon: Mapped[str | None] = mapped_column(String(20))
+    category_group: Mapped[str | None] = mapped_column(String(36), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 

@@ -212,9 +212,10 @@ async def update_category(
     budget_period: str | None = None,
     enabled: bool | None = None,
     icon: str | None = None,
+    auto_keywords: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Update any supplied category fields. Disabled categories stop receiving assignments."""
-    payload = {key: value for key, value in {"budget": budget, "budget_period": budget_period, "enabled": enabled, "icon": icon}.items() if value is not None}
+    """Update category settings. auto_keywords are phrases matched in transaction descriptions or counterparties."""
+    payload = {key: value for key, value in {"budget": budget, "budget_period": budget_period, "enabled": enabled, "icon": icon, "auto_keywords": auto_keywords}.items() if value is not None}
     return await api("PATCH", f"/api/categories/{category_id}", json=payload)
 
 

@@ -177,6 +177,65 @@ class DemoTest(unittest.IsolatedAsyncioTestCase):
         future = next(row for row in (await self.client.get("/api/transactions")).json() if row["description"] == "Sandbox purchase" and row["id"] not in {item["id"] for item in transactions})
         self.assertEqual(future["category_id"], category_id)
 
+    async def test_category_keywords_assign_existing_and_future_expenses(self):
+        with self.bank_mock(), patch.object(bank_client, "make_jwt", return_value="sandbox-jwt"):
+            await self.connect_and_import()
+        category_id = (await self.client.get("/api/categories?month=2026-11")).json()[0]["id"]
+
+        from app.models import Account, Transaction
+        async with demo.store.database(self.owner) as db:
+            account_id = await db.scalar(select(Account.id))
+            db.add(Transaction(
+                account_id=account_id, external_id="cube-existing",
+                booking_date=datetime(2026, 11, 3, tzinfo=timezone.utc), amount=9,
+                currency="EUR", direction="DBIT", description="CARD PURCHASE CUBE   CAFE TALLINN",
+                raw_data={"creditor": {"name": "Card terminal"}},
+            ))
+            await db.commit()
+
+        response = await self.client.patch(
+            f"/api/categories/{category_id}", json={"auto_keywords": [" CUBE  CAFE "]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        categories = (await self.client.get("/api/categories?month=2026-11")).json()
+        self.assertEqual(next(row for row in categories if row["id"] == category_id)["auto_keywords"], ["cube cafe"])
+        localized = (await self.client.get("/api/categories?month=2026-11&language=en")).json()
+        self.assertEqual(next(row for row in localized if row["id"] == category_id)["auto_keywords"], ["cube cafe"])
+        existing = next(row for row in (await self.client.get("/api/transactions")).json()
+                        if row["description"].startswith("CARD PURCHASE CUBE"))
+        self.assertEqual(existing["category_id"], category_id)
+
+        async with demo.store.database(self.owner) as db:
+            account_id = await db.scalar(select(Account.id))
+            db.add(Transaction(
+                account_id=account_id, external_id="cube-future",
+                booking_date=datetime(2026, 11, 4, tzinfo=timezone.utc), amount=11,
+                currency="EUR", direction="DBIT", description="Lunch",
+                raw_data={"creditor": {"name": "Cube Cafe Ülemiste"}},
+            ))
+            await db.commit()
+        await self.client.get("/api/categories?month=2026-11")
+        future = next(row for row in (await self.client.get("/api/transactions")).json()
+                      if row["description"] == "Lunch")
+        self.assertEqual(future["category_id"], category_id)
+
+        january = (await self.client.get("/api/categories?month=2027-01&language=en")).json()
+        self.assertTrue(any(row["auto_keywords"] == ["cube cafe"] for row in january))
+        december = (await self.client.get("/api/categories?month=2026-12&language=en")).json()
+        december_category = next(row for row in december if row["auto_keywords"] == ["cube cafe"])
+        async with demo.store.database(self.owner) as db:
+            account_id = await db.scalar(select(Account.id))
+            db.add(Transaction(
+                account_id=account_id, external_id="cube-december",
+                booking_date=datetime(2026, 12, 4, tzinfo=timezone.utc), amount=13,
+                currency="EUR", direction="DBIT", description="CUBE CAFE December lunch", raw_data={},
+            ))
+            await db.commit()
+        await self.client.get("/api/categories?month=2026-12&language=en")
+        december_transaction = next(row for row in (await self.client.get("/api/transactions")).json()
+                                    if row["description"] == "CUBE CAFE December lunch")
+        self.assertEqual(december_transaction["category_id"], december_category["id"])
+
     async def test_live_bank_credentials_cannot_be_used_in_demo(self):
         with self.bank_mock(environment="PRODUCTION"), patch.object(bank_client, "make_jwt", return_value="test-jwt"):
             response = await self.client.post("/api/demo/connect")
