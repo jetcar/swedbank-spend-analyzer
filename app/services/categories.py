@@ -78,6 +78,7 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
         )).all()
         spent = {category_id: amount for category_id, amount, _ in totals}
         earned = {category_id: amount for category_id, _, amount in totals}
+        keywords_by_category = await category_rules.category_keywords(db, owner_id, categories)
     return [
         {"id": category.id, "name": category.name, "icon": category.icon, "month": category.month, "budget": money_string(category.budget or Decimal(0)),
          "budget_period": category.budget_period,
@@ -85,7 +86,8 @@ async def list_categories(*, month: str, language: Literal['ru', 'en', 'et'], ow
          "available_budget": money_string(effective_available_budget(category.budget or 0, category.budget_period, category.month)),
          "enabled": category.enabled, "spent": money_string(spent.get(category.id) or Decimal(0)),
          "earned": money_string(earned.get(category.id) or Decimal(0)),
-         "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status}
+         "currency": category.currency, "forecast_mode": category.forecast_mode, "payment_status": category.payment_status,
+         "auto_keywords": keywords_by_category.get(category.id, [])}
         for category in categories
     ]
 
@@ -124,7 +126,6 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             raise HTTPException(404, "Category not found")
         if settings.name is not None:
             if settings.name != category.name:
-                old_name = category.name
                 duplicate = await db.scalar(
                     select(Category.id).where(
                         Category.owner_id == owner_id,
@@ -136,7 +137,7 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
                     raise HTTPException(409, "Category already exists for this month")
                 category.name = settings.name
                 await db.execute(update(CategoryRule).where(
-                    CategoryRule.owner_id == owner_id, CategoryRule.category_name == old_name,
+                    CategoryRule.owner_id == owner_id, CategoryRule.category_group == category.rule_group,
                 ).values(category_name=settings.name))
             category.name_customized = True
         if settings.budget is not None:
@@ -151,6 +152,10 @@ async def update_category(*, category_id: int, settings: schemas.CategorySetting
             value = getattr(settings, field)
             if value is not None:
                 setattr(category, field, value)
+        if settings.auto_keywords is not None:
+            await category_rules.replace_category_keywords(
+                db, owner_id, category, settings.auto_keywords,
+            )
         try:
             await db.commit()
         except IntegrityError as exc:

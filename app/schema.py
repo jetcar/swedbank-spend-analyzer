@@ -76,18 +76,42 @@ async def _upgrade_tenant_schema(connection, schema: str, owner_id: str) -> None
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'EUR'",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS forecast_mode VARCHAR(10) NOT NULL DEFAULT 'budget'",
         "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS payment_status VARCHAR(10) NOT NULL DEFAULT 'auto'",
+        "ALTER TABLE %(schema)s.categories ADD COLUMN IF NOT EXISTS rule_group VARCHAR(36)",
         "ALTER TABLE %(schema)s.accounts ADD COLUMN IF NOT EXISTS monitored BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE %(schema)s.accounts ADD COLUMN IF NOT EXISTS balance_adjustment NUMERIC(24, 2) NOT NULL DEFAULT 0",
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS value_date TIMESTAMPTZ",
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS category_id INTEGER",
         "ALTER TABLE %(schema)s.transactions ADD COLUMN IF NOT EXISTS excluded_from_statistics BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE %(schema)s.category_rules ADD COLUMN IF NOT EXISTS category_icon VARCHAR(20)",
+        "ALTER TABLE %(schema)s.category_rules ADD COLUMN IF NOT EXISTS category_group VARCHAR(36)",
         "ALTER TABLE %(schema)s.categories DROP CONSTRAINT IF EXISTS categories_name_key",
         "ALTER TABLE %(schema)s.categories DROP CONSTRAINT IF EXISTS uq_category_name_month",
         "DROP INDEX IF EXISTS %(schema)s.uq_category_name_month",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_category_owner_name_month ON %(schema)s.categories (owner_id, name, month)",
     ):
         await connection.execute(_tenant_ddl(statement, schema))
+    await connection.execute(_tenant_ddl(
+        """UPDATE %(schema)s.categories
+        SET rule_group = CASE
+            WHEN name_customized IS FALSE THEN 'default:' || icon
+            ELSE md5(owner_id || ':custom:' || name)
+        END WHERE rule_group IS NULL""", schema,
+    ))
+    await connection.execute(_tenant_ddl(
+        "ALTER TABLE %(schema)s.categories ALTER COLUMN rule_group SET NOT NULL", schema,
+    ))
+    await connection.execute(_tenant_ddl("""
+        UPDATE %(schema)s.category_rules AS rule
+        SET category_group = (
+            SELECT category.rule_group FROM %(schema)s.categories AS category
+            WHERE category.owner_id = rule.owner_id AND category.name = rule.category_name
+            ORDER BY category.month DESC LIMIT 1
+        )
+        WHERE rule.category_group IS NULL
+    """, schema))
+    await connection.execute(_tenant_ddl(
+        "CREATE INDEX IF NOT EXISTS ix_category_rules_category_group ON %(schema)s.category_rules (category_group)", schema,
+    ))
     await connection.execute(_tenant_ddl("""
         CREATE OR REPLACE FUNCTION %(schema)s.enforce_transaction_category_owner() RETURNS trigger AS $$
         DECLARE transaction_owner VARCHAR(320); category_owner VARCHAR(320);

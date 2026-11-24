@@ -34,6 +34,11 @@ export function createCategoriesView({ state, fetchJson, reload }) {
             : category.monthly_budget < 0 ? tr('Доходы к текущей дате') : tr('Расходы к текущей дате')}</span>${renderBudgetStatus(category)}</div>
           <div class="category-metric"><span>${category.budget < 0 ? tr('Ожидаемый доход') : tr('Бюджет')}</span><input type="number" step="0.01" value="${escapeHtml(category.budget || '')}" placeholder="∞" title="${tr('Отрицательный бюджет — ожидаемый доход')}" data-category-budget="${escapeHtml(category.id)}"><select data-category-budget-period="${escapeHtml(category.id)}" aria-label="${tr('Период бюджета')}: ${escapeHtml(category.name)}">${periodOptions(category.budget_period || 'month')}</select><small class="muted">${tr('За месяц')}: ${escapeHtml(category.monthly_budget)}</small></div>
         </div>
+        <div class="category-rules">
+          <span>${tr('Автоматическое назначение')}</span>
+          <div class="category-rule-list">${(category.auto_keywords || []).map(keyword => `<button type="button" class="category-rule" data-category-rule-remove="${escapeHtml(category.id)}" data-keyword="${escapeHtml(keyword)}" title="${tr('Удалить правило')}"><span>${escapeHtml(keyword)}</span> ×</button>`).join('') || `<small class="muted">${tr('Правил пока нет')}</small>`}</div>
+          <form class="category-rule-form" data-category-rule-form="${escapeHtml(category.id)}"><input name="keyword" maxlength="100" required placeholder="${tr('Например, CUBE CAFE')}" aria-label="${tr('Фраза в описании или получателе')}"><button type="submit" class="secondary">${tr('Добавить правило')}</button></form>
+        </div>
         <label class="switch"><input type="checkbox" ${category.enabled ? 'checked' : ''} data-category-enabled="${escapeHtml(category.id)}"> ${tr('Вкл.')}</label>
         <button class="icon-button" title="${tr('Удалить категорию')}" data-category-delete="${escapeHtml(category.id)}">${icon('trash')}</button>
       </div>`).join('') : `<div class="muted">${tr('В этом месяце категорий нет')}</div>`;
@@ -84,6 +89,21 @@ export function createCategoriesView({ state, fetchJson, reload }) {
       if (input.value.trim()) saveSetting(input, Number(input.dataset.categoryIcon), { icon: input.value.trim() });
     });
     document.querySelectorAll('[data-category-icon]').forEach(input => input.onclick = () => openIconPicker(input));
+    document.querySelectorAll('[data-category-rule-form]').forEach(form => form.onsubmit = event => {
+      event.preventDefault();
+      const id = Number(form.dataset.categoryRuleForm);
+      const category = state.categories.find(row => row.id === id);
+      const keyword = form.elements.keyword.value.trim();
+      if (!keyword) return;
+      const keywords = [...(category.auto_keywords || []), keyword];
+      return saveSetting(event.submitter, id, { auto_keywords: keywords });
+    });
+    document.querySelectorAll('[data-category-rule-remove]').forEach(button => button.onclick = () => {
+      const id = Number(button.dataset.categoryRuleRemove);
+      const category = state.categories.find(row => row.id === id);
+      const keywords = (category.auto_keywords || []).filter(keyword => keyword !== button.dataset.keyword);
+      return saveSetting(button, id, { auto_keywords: keywords });
+    });
     const newCategoryIcon = document.querySelector('#category-form input[name="icon"]');
     if (newCategoryIcon) newCategoryIcon.onclick = () => openIconPicker(newCategoryIcon);
     document.querySelectorAll('[data-category-delete]').forEach(button => button.onclick = () => {

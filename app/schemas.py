@@ -21,6 +21,7 @@ class CategorySettings(BaseModel):
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     forecast_mode: Literal["budget", "payment"] | None = None
     payment_status: Literal["auto", "open", "closed"] | None = None
+    auto_keywords: list[str] | None = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -31,6 +32,20 @@ class CategorySettings(BaseModel):
         if not name or len(name) > 100:
             raise ValueError("Category name must be between 1 and 100 characters")
         return name
+
+    @field_validator("auto_keywords")
+    @classmethod
+    def validate_auto_keywords(cls, keywords: list[str] | None) -> list[str] | None:
+        if keywords is None:
+            return None
+        normalized: list[str] = []
+        for keyword in keywords:
+            value = " ".join(keyword.split()).strip()
+            if not value or len(value) > 100:
+                raise ValueError("Auto-assignment keywords must be between 1 and 100 characters")
+            if value.casefold() not in {item.casefold() for item in normalized}:
+                normalized.append(value)
+        return normalized
 
 
 class CategoryAssignment(BaseModel):

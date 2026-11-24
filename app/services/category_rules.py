@@ -9,11 +9,24 @@ from app.transaction_details import transaction_counterparty_name
 from app.services.category_defaults import ensure_month_categories
 
 
+CONTAINS_PREFIX = "contains:"
+
+
+def normalize_match_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip().casefold()
+
+
+def transaction_search_text(transaction: Transaction) -> str:
+    return normalize_match_text(" ".join(filter(None, (
+        transaction_counterparty_name(transaction), transaction.description,
+    ))))
+
+
 def transaction_merchant_key(transaction: Transaction) -> str | None:
     counterparty = transaction_counterparty_name(transaction)
     if not counterparty:
         return None
-    normalized = re.sub(r"\s+", " ", counterparty).strip().casefold()
+    normalized = normalize_match_text(counterparty)
     return f"counterparty:{normalized}"[:500] or None
 
 
@@ -63,22 +76,77 @@ async def apply_category_rules(
         Category.month.in_(months),
     ))).all()) if months else []
     category_by_month_name = {(category.month, category.name): category for category in categories}
+    category_by_month_group = {(category.month, category.rule_group): category for category in categories}
     category_by_month_icon: dict[tuple[str, str], Category | None] = {}
     for category in categories:
         icon_key = (category.month, category.icon)
         category_by_month_icon[icon_key] = None if icon_key in category_by_month_icon else category
+    contains_rules = sorted(
+        (candidate for candidate in rules_by_key.values() if candidate.merchant_key.startswith(CONTAINS_PREFIX)),
+        key=lambda candidate: (-len(candidate.merchant_key), candidate.merchant_key),
+    )
     assigned = 0
     for transaction in transactions:
         key = transaction_merchant_key(transaction)
-        rule = rules_by_key.get(key)
+        search_text = transaction_search_text(transaction)
+        rule = next((candidate for candidate in contains_rules
+                     if candidate.merchant_key[len(CONTAINS_PREFIX):] in search_text), None)
+        if rule is None:
+            rule = rules_by_key.get(key)
         transaction_month_value = transaction_month(transaction)
-        category = None if rule is None else category_by_month_name.get((transaction_month_value, rule.category_name))
+        category = None if rule is None or not rule.category_group else category_by_month_group.get(
+            (transaction_month_value, rule.category_group)
+        )
+        if category is None and rule is not None:
+            category = category_by_month_name.get((transaction_month_value, rule.category_name))
         if category is None and rule is not None and rule.category_icon:
             category = category_by_month_icon.get((transaction_month_value, rule.category_icon))
         if category is not None:
             transaction.category_id = category.id
             assigned += 1
     return assigned
+
+
+async def category_keywords(
+    db: AsyncSession, owner_id: str, categories: list[Category],
+) -> dict[int, list[str]]:
+    rules = (await db.scalars(select(CategoryRule).where(
+        CategoryRule.owner_id == owner_id,
+        CategoryRule.merchant_key.startswith(CONTAINS_PREFIX),
+    ).order_by(CategoryRule.merchant_key))).all()
+    result: dict[int, list[str]] = {category.id: [] for category in categories}
+    categories_by_group = {category.rule_group: category for category in categories}
+    for rule in rules:
+        category = categories_by_group.get(rule.category_group)
+        if category is not None:
+            result[category.id].append(rule.merchant_key[len(CONTAINS_PREFIX):])
+    return result
+
+
+async def replace_category_keywords(
+    db: AsyncSession, owner_id: str, category: Category, keywords: list[str],
+) -> int:
+    normalized = [normalize_match_text(keyword) for keyword in keywords]
+    keys = {f"{CONTAINS_PREFIX}{keyword}" for keyword in normalized}
+    existing = list((await db.scalars(select(CategoryRule).where(
+        CategoryRule.owner_id == owner_id,
+        CategoryRule.merchant_key.in_(keys),
+    ))).all()) if keys else []
+    conflicts = [rule for rule in existing if rule.category_group != category.rule_group]
+    if conflicts:
+        from fastapi import HTTPException
+        raise HTTPException(409, f'Keyword already belongs to category "{conflicts[0].category_name}"')
+    await db.execute(delete(CategoryRule).where(
+        CategoryRule.owner_id == owner_id,
+        CategoryRule.category_group == category.rule_group,
+        CategoryRule.merchant_key.startswith(CONTAINS_PREFIX),
+    ))
+    db.add_all(CategoryRule(
+        owner_id=owner_id, merchant_key=key, category_name=category.name, category_icon=category.icon,
+        category_group=category.rule_group,
+    ) for key in sorted(keys))
+    await db.flush()
+    return await apply_category_rules(db, owner_id, merchant_keys=keys)
 
 
 async def remember_category_rule(
@@ -91,10 +159,12 @@ async def remember_category_rule(
         CategoryRule.owner_id == owner_id, CategoryRule.merchant_key == key,
     ))
     if rule is None:
-        db.add(CategoryRule(owner_id=owner_id, merchant_key=key, category_name=category.name, category_icon=category.icon))
+        db.add(CategoryRule(owner_id=owner_id, merchant_key=key, category_name=category.name,
+                            category_icon=category.icon, category_group=category.rule_group))
     else:
         rule.category_name = category.name
         rule.category_icon = category.icon
+        rule.category_group = category.rule_group
     await db.flush()
     return await apply_category_rules(db, owner_id, merchant_keys={key})
 

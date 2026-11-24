@@ -49,8 +49,12 @@ async def ensure_month_categories(db: AsyncSession, owner_id: str, month: str, l
         if localize_untouched_defaults(categories, language):
             await db.commit()
         return categories
-    year, month_number = (int(value) for value in month.split("-"))
-    previous_month = f"{year - (month_number == 1):04d}-{12 if month_number == 1 else month_number - 1:02d}"
+    previous_month = await db.scalar(
+        select(Category.month)
+        .where(Category.owner_id == owner_id, Category.month < month)
+        .order_by(Category.month.desc())
+        .limit(1)
+    )
     previous = list(
         (
             await db.scalars(
@@ -62,14 +66,14 @@ async def ensure_month_categories(db: AsyncSession, owner_id: str, month: str, l
     )
     if previous:
         categories = [
-            Category(owner_id=owner_id, name=category.name, icon=category.icon, month=month, budget=category.budget, budget_period=category.budget_period, enabled=category.enabled, name_customized=category.name_customized,
+            Category(owner_id=owner_id, name=category.name, icon=category.icon, month=month, rule_group=category.rule_group, budget=category.budget, budget_period=category.budget_period, enabled=category.enabled, name_customized=category.name_customized,
                      currency=category.currency, forecast_mode=category.forecast_mode, payment_status="auto")
             for category in previous
         ]
         localize_untouched_defaults(categories, language)
     else:
         categories = [
-            Category(owner_id=owner_id, name=name, icon=icon, month=month)
+            Category(owner_id=owner_id, name=name, icon=icon, month=month, rule_group=f"default:{icon}")
             for name, icon in category_defaults(language)
         ]
     db.add_all(categories)
