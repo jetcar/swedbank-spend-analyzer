@@ -1,8 +1,8 @@
-fastapi==0.162.0
+fastapi==0.165.0
 starlette==1.10.0
 uvicorn[standard]==0.54.0
 asyncpg==0.32.0
-sqlalchemy[asyncio]==2.1.8
+sqlalchemy[asyncio]==2.1.9
 aiosqlite==0.22.1
 python-dotenv==1.2.4
 httpx==0.28.1
