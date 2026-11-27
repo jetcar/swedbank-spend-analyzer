@@ -98,3 +98,16 @@ class OidcValidationTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as error:
             await auth._jwks_key("not-a-jwt")
         self.assertEqual(error.exception.status_code, 401)
+
+    async def test_id_token_validation_does_not_log_exception_details(self):
+        secret = "test-only-jwt-validation-secret-sentinel"
+        with (
+            patch.object(auth.jwt, "decode", side_effect=jwt.InvalidTokenError(secret)),
+            self.assertLogs(auth.logger, level="WARNING") as logs,
+            self.assertRaises(HTTPException) as error,
+        ):
+            await self.callback({})
+        self.assertEqual(error.exception.status_code, 401)
+        self.assertFalse(self.store.sessions)
+        self.assertNotIn(secret, "\n".join(logs.output))
+        self.assertIn("InvalidTokenError", "\n".join(logs.output))

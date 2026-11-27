@@ -216,7 +216,7 @@ async def callback(request: Request, code: str | None = None, state: str | None 
             options={"require": ["sub", "iss", "aud", "exp", "iat"]},
         )
     except jwt.PyJWTError as error:
-        logger.warning("Passi ID token validation failed: %s", error)
+        logger.warning("Passi ID validation failed (%s)", type(error).__name__)
         raise HTTPException(401, "Invalid Passi ID token") from error
     email = str(claims.get("email") or "").strip().lower()
     if not PASSI_ALLOWED_EMAILS or email not in PASSI_ALLOWED_EMAILS:
